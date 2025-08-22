@@ -1,0 +1,1 @@
+Create a small python applicaton code (like azure cli) with a simple dummy command
