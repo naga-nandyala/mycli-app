@@ -657,26 +657,75 @@ twine upload dist/*
 pip install mycli-app[azure]
 ```
 
-### Installation Methods for Users
+#### Option 4: Modern Package Managers (NEW for 2025)
 
-#### From Source Repository
+##### WinGet (Microsoft's Package Manager)
+```bash
+# Users install with:
+winget install YourCompany.MyCliApp
+```
+
+##### Chocolatey (Windows)
+```bash
+# Users install with:
+choco install mycli-app
+```
+
+##### Homebrew (macOS) - Future
+```bash
+# Future support:
+brew install mycli-app
+```
+
+#### Option 5: Standalone Executables (Windows)
+
+Using PyInstaller to create `mycli.exe`:
+```bash
+# Build standalone executable
+pyinstaller mycli.spec --clean --noconfirm
+
+# Users run directly (no Python required):
+mycli.exe --help
+```
+
+**Benefits:**
+- No Python installation required
+- Single file distribution
+- Works on any Windows system
+- Professional appearance
+
+### Installation Methods for Users (2025)
+
+#### 1. PyPI (Cross-platform)
+```bash
+pip install mycli-app[azure]              # Standard Python package
+```
+
+#### 2. Modern Windows Package Managers
+```powershell
+winget install YourCompany.MyCliApp       # Microsoft's native package manager
+choco install mycli-app                   # Chocolatey package manager
+```
+
+#### 3. Standalone Executable (Windows)
+```powershell
+# Download mycli.exe and run directly
+mycli.exe --version
+```
+
+#### 4. Enterprise Distribution
+```text
+- MSI Installer (Group Policy deployment)
+- MSIX Package (Microsoft Store, Intune)
+- Network Share deployment
+- Software Center (SCCM)
+```
+
+#### 5. Developer/Source Installation
 ```bash
 git clone https://github.com/naga-nandyala/mycli-app.git
 cd mycli-app
-pip install .                    # Basic
-pip install .[azure]            # With Azure
-pip install .[broker,dev]       # Multiple extras
-```
-
-#### From Built Package
-```bash
-pip install mycli_app-1.0.0-py3-none-any.whl
-pip install "mycli_app-1.0.0-py3-none-any.whl[azure]"
-```
-
-#### From PyPI
-```bash
-pip install mycli-app[azure]
+pip install -e .[dev]                     # Editable install
 ```
 
 ---
@@ -903,7 +952,61 @@ Run the CLI tool.
 
 ## Advanced Topics
 
-### 1. Custom Build Backends
+### 1. Modern Distribution Strategies (2025)
+
+#### WinGet Package Manager
+Microsoft's native package manager is now the preferred Windows distribution method:
+
+```yaml
+# winget manifest example
+PackageIdentifier: YourCompany.MyCliApp
+PackageVersion: 1.0.0
+PackageName: MyCliApp
+Publisher: Your Company
+ShortDescription: A comprehensive CLI tool for Azure resource management
+Installers:
+- Architecture: x64
+  InstallerType: zip
+  InstallerUrl: https://github.com/username/repo/releases/download/v1.0.0/app.zip
+```
+
+**Benefits:**
+- Native Windows integration
+- Automatic updates
+- Enterprise-friendly
+- No admin rights required for users
+
+#### Standalone Executables
+PyInstaller creates self-contained executables:
+
+```python
+# mycli.spec for PyInstaller
+a = Analysis(
+    ['src/mycli_app/__main__.py'],
+    pathex=['src'],
+    hiddenimports=['azure.identity', 'msal'],
+    excludes=['tkinter', 'matplotlib'],
+)
+exe = EXE(
+    pyz, a.scripts, a.binaries, a.zipfiles, a.datas,
+    name='mycli',
+    console=True,
+    upx=True  # Compression
+)
+```
+
+**Distribution Matrix (2025):**
+
+| Method | Size | Installation | User Experience | Enterprise | Recommended For |
+|--------|------|-------------|-----------------|------------|----------------|
+| **PyPI** | Small | `pip install` | Developer-friendly | ✅ | Developers, Python users |
+| **WinGet** | Auto | `winget install` | Native Windows | ✅✅ | **Primary choice (Windows)** |
+| **Chocolatey** | Medium | `choco install` | Package manager | ✅ | Windows power users |
+| **Standalone EXE** | Large | Extract & run | Zero-dependency | ✅ | Offline, simple deployment |
+| **MSI** | Medium | Windows installer | Professional | ✅✅ | Enterprise deployment |
+| **MSIX** | Medium | Store/Intune | Modern Windows | ✅✅ | Enterprise, Store apps |
+
+### 2. Custom Build Backends
 
 Instead of setuptools, you can use other build backends:
 
@@ -1001,7 +1104,7 @@ pip install -e .[lint]     # Just linting
 
 ## Summary
 
-This tutorial covered the complete process of transforming a single Python script into a professional, installable package:
+This tutorial covered the complete process of transforming a single Python script into a professional, installable package with modern distribution methods:
 
 ### ✅ What We Accomplished
 
@@ -1011,6 +1114,11 @@ This tutorial covered the complete process of transforming a single Python scrip
 4. **User Experience**: Easy `pip install mycli-app[azure]`
 5. **Complete Documentation**: User guides and examples
 6. **Distribution Ready**: Built wheel and source packages
+7. **🆕 Modern Distribution (2025)**:
+   - WinGet package for Windows native experience
+   - Standalone executables for zero-dependency deployment
+   - Professional MSI and NSIS installers
+   - Enterprise-ready MSIX packages
 
 ### 🎯 Key Takeaways
 
@@ -1019,15 +1127,26 @@ This tutorial covered the complete process of transforming a single Python scrip
 - **User First**: Design installation and usage for your users
 - **Test Everything**: Installation, functionality, uninstallation
 - **Document Well**: Your future self and users will thank you
+- **🆕 Embrace Modern Distribution**: WinGet and standalone executables for best user experience
 
-### 🚀 Next Steps
+### 🚀 Distribution Strategy for 2025
 
-1. **Publish to PyPI**: Share with the world
-2. **Add CI/CD**: Automate testing and publishing
-3. **Gather Feedback**: Listen to your users
-4. **Iterate**: Improve based on real usage
+1. **Primary**: WinGet package (Windows native)
+2. **Secondary**: PyPI with extras (cross-platform developers)
+3. **Enterprise**: MSI/MSIX for managed environments
+4. **Offline**: Standalone executables for air-gapped systems
+5. **Developers**: Source installation with editable mode
 
-You now have the knowledge to package any Python application professionally! 🎉
+### 🔮 Next Steps
+
+1. **Publish to PyPI**: Share with the Python community
+2. **Submit to WinGet**: Get native Windows distribution
+3. **Add CI/CD**: Automate testing and publishing
+4. **Gather Feedback**: Listen to your users
+5. **Iterate**: Improve based on real usage
+6. **🆕 Modern Packaging**: Explore MSIX for enterprise users
+
+You now have the knowledge to package any Python application professionally for the modern ecosystem! 🎉
 
 ---
 

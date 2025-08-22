@@ -23,24 +23,47 @@ A modern Python CLI application similar to Azure CLI with comprehensive Azure au
 
 ## Installation
 
-### Basic Installation (CLI only)
+### 🚀 Quick Start (2025)
+
+#### From PyPI (Recommended)
 ```bash
+# Basic CLI functionality
 pip install mycli-app
-```
 
-### With Azure Authentication Support
-```bash
+# With Azure authentication support
 pip install mycli-app[azure]
-```
 
-### With Enhanced Broker Authentication (Windows)
-```bash
+# With enhanced Windows authentication (Windows Hello, Microsoft Authenticator)
 pip install mycli-app[broker]
 ```
 
-### Development Installation
+#### Modern Package Managers
+
+**Windows (WinGet)**
+```powershell
+winget install YourCompany.MyCliApp
+```
+
+**Windows (Chocolatey)**
+```powershell
+choco install mycli-app
+```
+
+**macOS (Homebrew)** - Coming Soon
 ```bash
-pip install mycli-app[dev]
+brew install mycli-app
+```
+
+#### Standalone Executable (Windows)
+Download from [GitHub Releases](https://github.com/naga-nandyala/mycli-app/releases):
+- No Python installation required
+- Extract and run `mycli.exe`
+
+#### Development Installation
+```bash
+git clone https://github.com/naga-nandyala/mycli-app.git
+cd mycli-app
+pip install -e .[dev]
 ```
 
 ## Quick Start
@@ -236,6 +259,9 @@ The package supports multiple installation configurations:
 | Azure | `pip install mycli-app[azure]` | + Azure authentication |
 | Broker | `pip install mycli-app[broker]` | + Enhanced Windows authentication |
 | Development | `pip install mycli-app[dev]` | + Testing and development tools |
+| **WinGet** | `winget install YourCompany.MyCliApp` | **Native Windows package manager (2025)** |
+| **Chocolatey** | `choco install mycli-app` | **Windows package manager** |
+| **Standalone** | Download from releases | **No Python required (Windows)** |
 
 ## Requirements
 

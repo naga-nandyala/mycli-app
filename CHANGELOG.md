@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-08-22
+
+### Added
+- **Modern Windows Distribution**: Complete Windows installer ecosystem
+  - PyInstaller standalone executable (`mycli.exe`)
+  - Professional MSI installer with WiX Toolset
+  - NSIS custom installer with modern UI
+  - ZIP portable packages for offline distribution
+- **Modern Package Manager Support**:
+  - WinGet package manifest for Microsoft's native package manager
+  - Enhanced Chocolatey package configuration
+  - MSIX package support for Microsoft Store distribution
+- **Enhanced Documentation**:
+  - Comprehensive Windows installer guide (`WINDOWS_INSTALLERS.md`)
+  - Updated installation methods for 2025
+  - Professional distribution strategies
+- **Improved Build System**:
+  - Automated build scripts for all installer types
+  - Comprehensive testing framework for installers
+  - CI/CD integration with GitHub Actions
+- **Security Enhancements**:
+  - Code signing guidance and implementation
+  - Azure Code Signing integration
+  - Enhanced security practices documentation
+
+### Changed
+- **Installation Priority**: WinGet is now the recommended primary distribution method for Windows
+- **Documentation Updates**: All guides updated for 2025 best practices
+- **Build Process**: Streamlined build workflow with master build script
+- **Distribution Strategy**: Multi-format approach for different user types
+
+### Technical Details
+- **Build Artifacts**:
+  - Standalone EXE: ~25MB with all dependencies
+  - Portable ZIP: ~50MB with Python runtime
+  - MSI Installer: ~30MB professional installation
+  - NSIS Setup: ~28MB custom branded installer
+- **Platform Support**:
+  - Windows 7+ (all installer types)
+  - Windows 10/11 (WinGet, MSIX support)
+  - Cross-platform Python package (PyPI)
+
 ## [1.0.0] - 2025-08-22
 
 ### Added

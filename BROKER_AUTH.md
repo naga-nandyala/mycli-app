@@ -179,9 +179,28 @@ User Request → Platform Detection → Credential Selection → Authentication 
 
 ## Future Enhancements
 
-Planned improvements:
-- [ ] Support for FIDO2/WebAuthn keys
-- [ ] Integration with Azure AD Conditional Access
+Planned improvements for 2025-2026:
+- [x] **Windows Hello Integration** - Completed in v1.0.0
+- [x] **Microsoft Authenticator Support** - Completed in v1.0.0
+- [ ] Support for FIDO2/WebAuthn security keys
+- [ ] Integration with Azure AD Conditional Access policies
 - [ ] Enhanced logging and audit capabilities
 - [ ] Support for certificate-based authentication
-- [ ] macOS Keychain integration
+- [ ] macOS Keychain integration for broker-like experience
+- [ ] **Passkey Support** - Modern passwordless authentication
+- [ ] **Azure Code Signing Integration** - For signed executable distribution
+- [ ] **Enterprise SSO Integration** - Seamless corporate authentication
+
+### Modern Authentication Trends (2025)
+
+#### Passwordless Authentication
+- **Windows Hello for Business** - Biometric and PIN-based authentication
+- **FIDO2/WebAuthn** - Hardware security keys
+- **Passkeys** - Cross-platform passwordless experience
+- **Microsoft Authenticator** - Phone-based authentication
+
+#### Zero Trust Architecture
+- **Conditional Access** - Policy-based access control
+- **Device Compliance** - Trusted device requirements
+- **Risk-based Authentication** - Adaptive security measures
+- **Continuous Authentication** - Session monitoring and validation

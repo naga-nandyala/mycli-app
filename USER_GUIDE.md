@@ -6,10 +6,26 @@ MyCliApp is a command-line interface application that provides Azure-like functi
 
 ## Installation
 
-### Quick Install
+### 🚀 Quick Install (2025)
+
+#### PyPI (Recommended)
 ```bash
 pip install mycli-app[azure]
 ```
+
+#### Modern Package Managers (Windows)
+```powershell
+# WinGet (Microsoft's package manager)
+winget install YourCompany.MyCliApp
+
+# Chocolatey
+choco install mycli-app
+```
+
+#### Standalone Executable (Windows)
+- Download from [GitHub Releases](https://github.com/naga-nandyala/mycli-app/releases)
+- No Python installation required
+- Extract ZIP and run `mycli.exe`
 
 ### Installation Options
 - **Basic**: `pip install mycli-app` (CLI only)

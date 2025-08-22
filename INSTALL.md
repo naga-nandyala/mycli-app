@@ -1,85 +1,96 @@
 # Installation Instructions for MyCliApp
 
-## Quick Installation Guide
+## 🚀 Quick Installation Guide (2025)
 
-### Option 1: Install from Local Package (Current Setup)
+### Option 1: From PyPI (Recommended)
 
-1. **Navigate to the package directory**:
-   ```bash
-   cd "c:\dev_win\gitrepos_win\lrn_explore\pkg_related\pj1"
+```bash
+# Basic CLI functionality
+pip install mycli-app
+
+# With Azure authentication support
+pip install mycli-app[azure]
+
+# With enhanced Windows authentication (Windows Hello, Microsoft Authenticator)
+pip install mycli-app[broker]
+
+# For development
+pip install mycli-app[dev]
+```
+
+### Option 2: From GitHub Releases
+
+1. **Download the latest release**:
+   - Go to [Releases](https://github.com/naga-nandyala/mycli-app/releases)
+   - Download `MyCliApp-1.0.0-Standalone.zip` for Windows
+
+2. **Windows Executable** (No Python required):
+   ```powershell
+   # Extract the ZIP file
+   Expand-Archive MyCliApp-1.0.0-Standalone.zip
+   
+   # Run directly
+   .\mycli.exe --help
    ```
 
-2. **Install the basic version**:
+3. **Python Wheel**:
    ```bash
+   pip install mycli_app-1.0.0-py3-none-any.whl[azure]
+   ```
+
+### Option 3: From Source Repository
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/naga-nandyala/mycli-app.git
+   cd mycli-app
+   ```
+
+2. **Install from source**:
+   ```bash
+   # Basic installation
    pip install .
-   ```
-
-3. **Or install with Azure support**:
-   ```bash
+   
+   # With Azure support
    pip install .[azure]
-   ```
-
-4. **Or install with enhanced broker authentication**:
-   ```bash
+   
+   # With broker authentication
    pip install .[broker]
-   ```
-
-5. **Or install for development**:
-   ```bash
+   
+   # Development mode (editable install)
    pip install -e .[dev]
    ```
 
-### Option 2: Install from Built Packages
+### Option 4: Modern Package Managers (2025)
 
-1. **Navigate to the package directory**:
-   ```bash
-   cd "c:\dev_win\gitrepos_win\lrn_explore\pkg_related\pj1"
-   ```
+#### WinGet (Windows)
+```powershell
+winget install YourCompany.MyCliApp
+```
 
-2. **Install from wheel file** (recommended):
-   ```bash
-   pip install dist/mycli_app-1.0.0-py3-none-any.whl
-   ```
+#### Chocolatey (Windows)
+```powershell
+choco install mycli-app
+```
 
-3. **Or install from source distribution**:
-   ```bash
-   pip install dist/mycli_app-1.0.0.tar.gz
-   ```
+#### Homebrew (macOS) - Coming Soon
+```bash
+brew install mycli-app
+```
 
-4. **Install with Azure features**:
-   ```bash
-   pip install "dist/mycli_app-1.0.0-py3-none-any.whl[azure]"
-   ```
+## 📋 Installation Options Summary
 
-### Option 3: Development Installation
+| Installation Method | Command | Features Included | Platform |
+|---------------------|---------|-------------------|----------|
+| **PyPI Basic** | `pip install mycli-app` | Core CLI functionality | All |
+| **PyPI Azure** | `pip install mycli-app[azure]` | + Azure authentication | All |
+| **PyPI Broker** | `pip install mycli-app[broker]` | + Windows Hello/Authenticator | Windows |
+| **PyPI Dev** | `pip install mycli-app[dev]` | + Development tools | All |
+| **Windows EXE** | Download from releases | Standalone, no Python needed | Windows |
+| **WinGet** | `winget install YourCompany.MyCliApp` | Native Windows package | Windows |
+| **Chocolatey** | `choco install mycli-app` | Package manager | Windows |
 
-For development and contributing:
-
-1. **Clone/download the repository**
-2. **Navigate to the project directory**
-3. **Create a virtual environment** (recommended):
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate  # Windows
-   # or
-   source .venv/bin/activate  # macOS/Linux
-   ```
-
-4. **Install in development mode**:
-   ```bash
-   pip install -e .[dev]
-   ```
-
-## Installation Options
-
-| Installation Command | Features Included |
-|---------------------|-------------------|
-| `pip install .` | Basic CLI functionality |
-| `pip install .[azure]` | + Azure authentication |
-| `pip install .[broker]` | + Enhanced Windows authentication |
-| `pip install .[dev]` | + Development tools (testing, linting) |
-
-## Verification
+## ✅ Verification
 
 After installation, verify it works:
 
@@ -90,48 +101,95 @@ mycli --version
 # Show help
 mycli --help
 
-# Check status
+# Check system status
 mycli status
 
-# Test a command
-mycli resource list
+# Test authentication status
+mycli whoami
 ```
 
-## Publishing to PyPI (Future)
+## 🌍 Virtual Environment (Recommended)
 
-When ready to publish to PyPI:
+For the best experience, use a virtual environment:
 
+```bash
+# Create virtual environment
+python -m venv mycli-env
+
+# Activate (Windows)
+mycli-env\Scripts\activate
+
+# Activate (macOS/Linux)
+source mycli-env/bin/activate
+
+# Install mycli-app
+pip install mycli-app[azure]
+
+# Use the application
+mycli --help
+```
+
+## 🔄 Updating
+
+### From PyPI
+```bash
+# Update to latest version
+pip install --upgrade mycli-app[azure]
+```
+
+### From WinGet
+```powershell
+winget upgrade YourCompany.MyCliApp
+```
+
+### From Chocolatey
+```powershell
+choco upgrade mycli-app
+```
+
+## 📦 Publishing to PyPI (For Maintainers)
+
+### First-time Setup
 1. **Create accounts**:
-   - Create an account on [PyPI](https://pypi.org/account/register/)
-   - Create an account on [TestPyPI](https://test.pypi.org/account/register/) for testing
+   - [PyPI](https://pypi.org/account/register/) (production)
+   - [TestPyPI](https://test.pypi.org/account/register/) (testing)
 
-2. **Configure authentication**:
+2. **Configure API tokens**:
    ```bash
-   # Configure for TestPyPI (for testing)
-   twine configure
+   # Set up authentication
+   pip install twine
+   
+   # Configure .pypirc file with API tokens
    ```
 
-3. **Upload to TestPyPI first**:
-   ```bash
-   twine upload --repository testpypi dist/*
-   ```
+### Publishing Process
+```bash
+# 1. Clean previous builds
+rm -rf dist/ build/ *.egg-info/
 
-4. **Test installation from TestPyPI**:
-   ```bash
-   pip install --index-url https://test.pypi.org/simple/ mycli-app
-   ```
+# 2. Build package
+python -m build
 
-5. **Upload to PyPI** (production):
-   ```bash
-   twine upload dist/*
-   ```
+# 3. Check package
+twine check dist/*
 
-6. **Once published, users can install with**:
-   ```bash
-   pip install mycli-app
-   pip install mycli-app[azure]
-   pip install mycli-app[broker]
-   ```
+# 4. Upload to TestPyPI first
+twine upload --repository testpypi dist/*
+
+# 5. Test installation from TestPyPI
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ mycli-app[azure]
+
+# 6. Upload to production PyPI
+twine upload dist/*
+```
+
+### After Publishing
+Users can install with:
+```bash
+pip install mycli-app[azure]
+pip install mycli-app[broker]
+pip install mycli-app[dev]
+```
 
 ## Requirements
 

@@ -10,30 +10,36 @@ This guide shows you how to create professional Windows installers for your Pyth
 4. [Method 2: Standalone Executable with PyInstaller](#method-2-standalone-executable-with-pyinstaller)
 5. [Method 3: MSI Installer with WiX Toolset](#method-3-msi-installer-with-wix-toolset)
 6. [Method 4: NSIS Installer](#method-4-nsis-installer)
-7. [Testing Your Installers](#testing-your-installers)
-8. [Distribution Strategies](#distribution-strategies)
-9. [Code Signing](#code-signing)
-10. [Best Practices](#best-practices)
+7. [Method 5: Modern Package Managers (2025)](#method-5-modern-package-managers-2025)
+8. [Method 6: MSIX Package for Microsoft Store](#method-6-msix-package-for-microsoft-store)
+9. [Testing Your Installers](#testing-your-installers)
+10. [Distribution Strategies](#distribution-strategies)
+11. [Code Signing](#code-signing)
+12. [Best Practices](#best-practices)
 
 ---
 
 ## Overview
 
-We'll create multiple Windows distribution formats:
+We'll create **six different Windows distribution formats** for 2025:
 
 - **📦 ZIP Archive**: Simple portable version
 - **🎯 Standalone EXE**: Single executable file
 - **💿 MSI Installer**: Professional Windows installer
 - **🔧 NSIS Installer**: Lightweight custom installer
+- **📋 WinGet Package**: Microsoft's native package manager (NEW for 2025)
+- **🏪 MSIX Package**: Microsoft Store and enterprise deployment (NEW for 2025)
 
 Each method has different advantages:
 
-| Method | Size | Installation | User Experience | Enterprise-Friendly |
-|--------|------|-------------|-----------------|-------------------|
-| ZIP | Small | Manual | Simple | ✅ |
-| EXE | Large | None needed | Excellent | ✅ |
-| MSI | Medium | Windows native | Professional | ✅✅ |
-| NSIS | Medium | Custom | Branded | ✅ |
+| Method | Size | Installation | User Experience | Enterprise-Friendly | 2025 Recommended |
+|--------|------|-------------|-----------------|-------------------|-----------------|
+| ZIP | Small | Manual | Simple | ✅ | For developers |
+| EXE | Large | None needed | Excellent | ✅ | For power users |
+| MSI | Medium | Windows native | Professional | ✅✅ | For enterprises |
+| NSIS | Medium | Custom | Branded | ✅ | For legacy systems |
+| **WinGet** | **Auto** | **Native** | **Modern** | **✅✅** | **✅ PRIMARY** |
+| **MSIX** | **Medium** | **Store/Enterprise** | **Seamless** | **✅✅** | **✅ ENTERPRISE** |
 
 ---
 
@@ -580,6 +586,135 @@ makensis mycli.nsi
 
 ---
 
+## Method 5: Modern Package Managers (2025)
+
+### WinGet Package Manager
+
+Microsoft's native Windows Package Manager is now the recommended distribution method for modern Windows applications.
+
+#### Step 1: Create WinGet Manifest
+
+Create `installers/winget/manifests/MyCliApp.yaml`:
+
+```yaml
+# Created using wingetcreate
+PackageIdentifier: YourCompany.MyCliApp
+PackageVersion: 1.0.0
+PackageName: MyCliApp
+Publisher: Your Company
+ShortDescription: A comprehensive CLI tool for Azure resource management
+License: MIT
+LicenseUrl: https://github.com/naga-nandyala/mycli-app/blob/main/LICENSE
+Installers:
+- Architecture: x64
+  InstallerType: zip
+  InstallerUrl: https://github.com/naga-nandyala/mycli-app/releases/download/v1.0.0/MyCliApp-1.0.0-Standalone.zip
+  InstallerSha256: [SHA256_HASH]
+  Commands:
+  - mycli
+ManifestType: singleton
+ManifestVersion: 1.4.0
+```
+
+#### Step 2: Submit to WinGet Community Repository
+
+```powershell
+# Install winget-create tool
+winget install winget-create
+
+# Create manifest automatically
+wingetcreate new https://github.com/naga-nandyala/mycli-app/releases/download/v1.0.0/MyCliApp-1.0.0-Standalone.zip
+
+# Submit via GitHub PR to microsoft/winget-pkgs repository
+```
+
+### Enhanced Chocolatey Package (2025)
+
+#### Create Modern Chocolatey Package
+
+Create `installers/chocolatey/mycli-app.nuspec`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>mycli-app</id>
+    <version>1.0.0</version>
+    <packageSourceUrl>https://github.com/naga-nandyala/mycli-app</packageSourceUrl>
+    <owners>Your Name</owners>
+    <title>MyCliApp</title>
+    <authors>Your Name</authors>
+    <projectUrl>https://github.com/naga-nandyala/mycli-app</projectUrl>
+    <licenseUrl>https://github.com/naga-nandyala/mycli-app/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/naga-nandyala/mycli-app</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/naga-nandyala/mycli-app/issues</bugTrackerUrl>
+    <tags>cli azure authentication command-line tool admin</tags>
+    <summary>A comprehensive CLI tool for Azure resource management</summary>
+    <description>MyCliApp provides a complete command-line interface for managing Azure resources with built-in authentication support.</description>
+    <releaseNotes>https://github.com/naga-nandyala/mycli-app/blob/main/CHANGELOG.md</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
+```
+
+---
+
+## Method 6: MSIX Package for Microsoft Store
+
+Modern Windows applications increasingly use MSIX packaging for store distribution and enterprise deployment.
+
+### Step 1: Create MSIX Package
+
+```powershell
+# Install Windows SDK for MSIX tools
+# Download from: https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/
+
+# Create MSIX from existing installer
+MakeAppx pack /d "installers\msix\source" /p "installers\MyCliApp-1.0.0.msix"
+```
+
+### Step 2: Configure Package Manifest
+
+Create `installers/msix/source/AppxManifest.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10">
+  <Identity Name="YourCompany.MyCliApp" 
+            Publisher="CN=Your Company" 
+            Version="1.0.0.0" />
+  
+  <Properties>
+    <DisplayName>MyCliApp</DisplayName>
+    <PublisherDisplayName>Your Company</PublisherDisplayName>
+    <Logo>images\logo.png</Logo>
+    <Description>A comprehensive CLI tool for Azure resource management</Description>
+  </Properties>
+  
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22000.0" />
+  </Dependencies>
+  
+  <Applications>
+    <Application Id="MyCliApp" Executable="mycli.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="MyCliApp" Description="Azure CLI Tool" 
+                         BackgroundColor="transparent" Square150x150Logo="images\logo.png" 
+                         Square44x44Logo="images\logo44.png" />
+    </Application>
+  </Applications>
+  
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" />
+  </Capabilities>
+</Package>
+```
+
+---
+
 ## Testing Your Installers
 
 ### Test Matrix
@@ -635,10 +770,11 @@ Test on clean Windows VMs:
 
 | User Type | Recommended Installer | Reason |
 |-----------|----------------------|---------|
-| **End Users** | NSIS Setup.exe | Professional, branded experience |
+| **End Users (2025)** | WinGet Package | Native Windows experience, automatic updates |
 | **Developers** | ZIP Portable | No admin rights needed |
-| **Enterprise** | MSI | Group Policy deployment |
+| **Enterprise** | MSI + MSIX | Group Policy deployment, Store integration |
 | **Power Users** | Standalone EXE | Simple, no installation |
+| **Legacy Systems** | NSIS Setup.exe | Compatible with older Windows versions |
 
 ### Distribution Channels
 
@@ -652,7 +788,9 @@ Test on clean Windows VMs:
 📦 Internal Distribution
 ├── Network share: \\company\software\MyCliApp\
 ├── Software Center (SCCM)
-└── Chocolatey package (choco install mycli-app)
+├── Chocolatey package (choco install mycli-app)
+├── WinGet package (winget install mycli-app)
+└── Microsoft Store (enterprise apps)
 ```
 
 ---
@@ -664,16 +802,36 @@ Test on clean Windows VMs:
 - **Trust**: Users trust signed software
 - **Security**: Windows SmartScreen won't block
 - **Enterprise**: Required for many organizations
+- **Store Requirements**: Microsoft Store requires signed packages
+- **WinGet**: Signed packages get prioritized in WinGet repository
 
-### Signing Process
+### Modern Signing Process (2025)
 
 ```powershell
-# Sign with certificate (example with signtool)
+# Option 1: Traditional certificate signing
 signtool sign /f "certificate.pfx" /p "password" /t "http://timestamp.digicert.com" "MyCliApp-1.0.0-Setup.exe"
+
+# Option 2: Azure Code Signing (Cloud HSM) - Recommended
+signtool sign /tr "http://timestamp.acs.microsoft.com" /td sha256 /fd sha256 /a "MyCliApp-1.0.0-Setup.exe"
+
+# Option 3: GitHub Actions with Azure Key Vault
+# See: https://docs.microsoft.com/en-us/azure/key-vault/certificates/tutorial-import-cert
 
 # Verify signature
 signtool verify /pa "MyCliApp-1.0.0-Setup.exe"
 ```
+
+### Certificate Sources (2025)
+
+1. **Azure Code Signing** (Recommended)
+   - Cloud-based HSM
+   - No local certificate management
+   - Integrated with CI/CD pipelines
+
+2. **Traditional Code Signing Certificates**
+   - DigiCert, Sectigo, GlobalSign
+   - Hardware tokens or software certificates
+   - Annual renewal required
 
 ---
 
@@ -761,63 +919,89 @@ try {
 }
 ```
 
-### CI/CD Integration
+### CI/CD Integration (Updated for 2025)
 
 ```yaml
-# GitHub Actions example
-name: Build Windows Installers
+# GitHub Actions example - Modern Windows packaging
+name: Build and Deploy Windows Packages
 
 on:
   release:
     types: [published]
 
 jobs:
-  build-windows-installers:
+  build-windows-packages:
     runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write  # For Azure Code Signing
+    
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install pyinstaller winget-create
           
-      - name: Build installers
+      # Traditional installers
+      - name: Build traditional installers
         run: |
           cd installers
           .\build_all.ps1 -Version ${{ github.event.release.tag_name }}
-          
-      - name: Upload installers
-        uses: actions/upload-release-asset@v1
+      
+      # Code signing with Azure
+      - name: Azure Code Signing
+        uses: azure/code-signing-action@v1
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: installers/
-          asset_name: windows-installers.zip
-          asset_content_type: application/zip
+          certificate-name: 'MyCertificate'
+          files: 'installers/**/*.exe,installers/**/*.msi'
+          
+      # WinGet package submission
+      - name: Submit to WinGet
+        run: |
+          wingetcreate update YourCompany.MyCliApp \
+            --urls https://github.com/${{ github.repository }}/releases/download/${{ github.event.release.tag_name }}/MyCliApp-${{ github.event.release.tag_name }}-Standalone.zip \
+            --version ${{ github.event.release.tag_name }} \
+            --submit
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          
+      # Upload to release
+      - name: Upload installers
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            installers/*.zip
+            installers/*.exe
+            installers/*.msi
+            installers/*.msix
 ```
 
 ---
 
 ## Summary
 
-You now have four different Windows distribution methods:
+You now have **six different Windows distribution methods** for 2025:
 
 1. **📦 ZIP Archive** - Portable, no installation
 2. **🎯 Standalone EXE** - Single file, easy to share
 3. **💿 MSI Installer** - Professional Windows installer
 4. **🔧 NSIS Installer** - Custom branded installer
+5. **📋 WinGet Package** - Microsoft's native package manager (2025)
+6. **🏪 MSIX Package** - Microsoft Store and enterprise deployment
 
-Each serves different use cases and user preferences. Choose based on your target audience and deployment requirements!
+Each serves different use cases and user preferences. **For 2025, WinGet is recommended as the primary distribution method** for modern Windows applications, with MSI as backup for enterprise environments.
 
 ### Quick Commands Summary
 
 ```powershell
-# Build all installers
+# Build all traditional installers
 cd installers
 .\build_all.ps1
 
@@ -829,6 +1013,11 @@ cd pyinstaller && .\build.ps1  # Standalone EXE
 cd zip && .\build.ps1           # ZIP package
 cd msi && .\build.ps1           # MSI installer
 cd nsis && .\build.ps1          # NSIS installer
+
+# Modern package managers (2025)
+winget install winget-create    # Create WinGet manifest
+choco pack                      # Create Chocolatey package
+MakeAppx pack                   # Create MSIX package
 ```
 
-Your users can now install MyCliApp using their preferred method! 🎉
+**For 2025, prioritize WinGet distribution for the best user experience!** 🎉
