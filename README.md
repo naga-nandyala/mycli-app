@@ -6,7 +6,9 @@ A simple Python CLI application similar to Azure CLI with Azure authentication c
 
 - **Resource Management**: Create, list, and delete resources (dummy operations)
 - **Configuration Management**: Set and view configuration settings
-- **Azure Authentication**: Real Azure authentication using Azure SDK
+- **Azure Authentication**: Real Azure authentication using Azure SDK with multiple authentication methods
+- **Broker Authentication**: Enhanced security through Windows Hello and Microsoft Authenticator
+- **Device Code Flow**: Authentication for environments without browser access
 - **Status Monitoring**: Check system status and health
 - **Colorized Output**: Enhanced terminal output with colors and icons
 - **Cross-platform**: Works on Windows, macOS, and Linux
@@ -33,8 +35,9 @@ The application now supports real Azure authentication through the Azure SDK. To
 
 2. You can authenticate using:
    - **Interactive Browser Login**: Default method, opens a browser for authentication
+   - **Broker Authentication**: Enhanced security using Windows Hello or Microsoft Authenticator (Windows)
+   - **Device Code Flow**: For environments without browser access or remote scenarios
    - **Azure CLI**: If you're already authenticated with Azure CLI
-   - **Device Code Flow**: Coming soon for environments without browser access
 
 ## Usage
 
@@ -57,8 +60,17 @@ python mycli.py status
 # Login to Azure (opens browser)
 python mycli.py login
 
+# Login with broker authentication (Windows Hello/Authenticator)
+python mycli.py login --use-broker
+
+# Login with device code flow (for remote/headless scenarios)
+python mycli.py login --use-device-code
+
 # Login with specific tenant
 python mycli.py login --tenant "your-tenant-id"
+
+# Check broker authentication capabilities
+python mycli.py broker
 
 # Check who you're logged in as
 python mycli.py whoami
@@ -127,8 +139,10 @@ Authentication information is stored in:
 
 The stored information includes:
 - Authentication status
-- User information
+- User information (user ID, display name)
 - Tenant ID (if specified)
+- Authentication method used (browser, broker, device_code, cli)
+- Broker capabilities (for broker authentication)
 
 **Note**: Credentials are managed by the Azure SDK and are not stored directly in the config file.
 
