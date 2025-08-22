@@ -1,0 +1,23 @@
+# Include documentation and metadata files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include requirements.txt
+include pyproject.toml
+include setup.py
+
+# Include source files and packages
+recursive-include src *.py
+recursive-include src *.pyi
+
+# Exclude development and build files
+exclude .gitignore
+exclude .github/*
+exclude .vscode/*
+exclude tests/*
+exclude _scratch/*
+prune .git
+prune __pycache__
+prune *.egg-info
+prune build
+prune dist

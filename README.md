@@ -1,134 +1,150 @@
 # MyCliApp
 
-A simple Python CLI application similar to Azure CLI with Azure authentication capabilities.
+A modern Python CLI application similar to Azure CLI with comprehensive Azure authentication capabilities.
+
+[![PyPI version](https://badge.fury.io/py/mycli-app.svg)](https://badge.fury.io/py/mycli-app)
+[![Python Support](https://img.shields.io/pypi/pyversions/mycli-app.svg)](https://pypi.org/project/mycli-app/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
 
-- **Resource Management**: Create, list, and delete resources (dummy operations)
-- **Configuration Management**: Set and view configuration settings
-- **Azure Authentication**: Real Azure authentication using Azure SDK with multiple authentication methods
-- **Broker Authentication**: Enhanced security through Windows Hello and Microsoft Authenticator
-- **Device Code Flow**: Authentication for environments without browser access
-- **Status Monitoring**: Check system status and health
-- **Colorized Output**: Enhanced terminal output with colors and icons
-- **Cross-platform**: Works on Windows, macOS, and Linux
-- **Persistent Authentication**: Saves authentication state between sessions
+- **🔐 Multiple Authentication Methods**: 
+  - Interactive browser authentication
+  - Broker-based authentication (Windows Hello, Microsoft Authenticator)
+  - Device code flow for headless environments
+  - Azure CLI credential fallback
+
+- **📦 Resource Management**: Create, list, and delete resources (demo operations)
+- **⚙️ Configuration Management**: Set and view configuration settings
+- **🎨 Colorized Output**: Enhanced terminal output with colors and icons
+- **🔄 Cross-platform**: Works on Windows, macOS, and Linux
+- **💾 Persistent Authentication**: Saves authentication state between sessions
+- **📊 Status Monitoring**: Check system status and health
 
 ## Installation
 
-1. Clone or download this repository
-2. Navigate to the project directory
-3. Install dependencies:
+### Basic Installation (CLI only)
+```bash
+pip install mycli-app
+```
+
+### With Azure Authentication Support
+```bash
+pip install mycli-app[azure]
+```
+
+### With Enhanced Broker Authentication (Windows)
+```bash
+pip install mycli-app[broker]
+```
+
+### Development Installation
+```bash
+pip install mycli-app[dev]
+```
+
+## Quick Start
+
+1. **Install the package**:
    ```bash
-   pip install -r requirements.txt
+   pip install mycli-app[azure]
    ```
 
-## Azure Authentication Setup
+2. **Check status**:
+   ```bash
+   mycli status
+   ```
 
-The application now supports real Azure authentication through the Azure SDK. To use Azure authentication features:
+3. **Login to Azure**:
+   ```bash
+   mycli login
+   ```
 
-1. Ensure you have the Azure packages installed (included in requirements.txt):
-   - azure-identity
-   - azure-mgmt-core
-   - azure-core
-   - msal
-
-2. You can authenticate using:
-   - **Interactive Browser Login**: Default method, opens a browser for authentication
-   - **Broker Authentication**: Enhanced security using Windows Hello or Microsoft Authenticator (Windows)
-   - **Device Code Flow**: For environments without browser access or remote scenarios
-   - **Azure CLI**: If you're already authenticated with Azure CLI
+4. **Start using commands**:
+   ```bash
+   mycli resource list
+   mycli whoami
+   ```
 
 ## Usage
-
-### Basic Commands
-
-```bash
-# Show help
-python mycli.py --help
-
-# Show version
-python mycli.py --version
-
-# Show status (includes authentication status)
-python mycli.py status
-```
 
 ### Authentication Commands
 
 ```bash
-# Login to Azure (opens browser)
-python mycli.py login
+# Interactive browser login
+mycli login
 
-# Login with broker authentication (Windows Hello/Authenticator)
-python mycli.py login --use-broker
+# Broker authentication (Windows Hello/Authenticator)
+mycli login --use-broker
 
-# Login with device code flow (for remote/headless scenarios)
-python mycli.py login --use-device-code
+# Device code flow (for remote/headless scenarios)
+mycli login --use-device-code
 
 # Login with specific tenant
-python mycli.py login --tenant "your-tenant-id"
+mycli login --tenant "your-tenant-id"
 
-# Check broker authentication capabilities
-python mycli.py broker
-
-# Check who you're logged in as
-python mycli.py whoami
+# Check authentication status
+mycli whoami
 
 # View account information
-python mycli.py account
+mycli account
 
-# Logout from Azure
-python mycli.py logout
+# Check broker capabilities
+mycli broker
+
+# Logout
+mycli logout
 ```
 
 ### Resource Management
 
 ```bash
 # Create a resource
-python mycli.py resource create --name "my-vm" --location "eastus" --type "vm"
+mycli resource create --name "my-vm" --location "eastus" --type "vm"
 
 # List all resources
-python mycli.py resource list
+mycli resource list
 
 # List resources by location
-python mycli.py resource list --location "eastus"
+mycli resource list --location "eastus"
 
 # List resources by type
-python mycli.py resource list --type "vm"
+mycli resource list --type "vm"
 
 # Delete a resource (with confirmation)
-python mycli.py resource delete "my-vm"
+mycli resource delete "my-vm"
 ```
 
 ### Configuration Management
 
 ```bash
 # Set a configuration value
-python mycli.py config set --key "default_location" --value "westus"
+mycli config set --key "default_location" --value "westus"
 
 # Show all configuration
-python mycli.py config show
+mycli config show
 
 # Show specific configuration key
-python mycli.py config show --key "default_location"
+mycli config show --key "default_location"
 ```
 
-## Installation as Package
-
-To install this as a system-wide command:
+### System Commands
 
 ```bash
-pip install -e .
-```
-
-After installation, you can use the `mycli` command directly:
-
-```bash
-mycli --help
-mycli login
-mycli resource list
+# Show system status
 mycli status
+
+# Show version
+mycli --version
+
+# Show help
+mycli --help
+
+# Clear authentication cache
+mycli clear-cache
+
+# Clear all cache including MSAL
+mycli clear-cache --all
 ```
 
 ## Authentication Storage
@@ -141,87 +157,167 @@ The stored information includes:
 - Authentication status
 - User information (user ID, display name)
 - Tenant ID (if specified)
-- Authentication method used (browser, broker, device_code, cli)
-- Broker capabilities (for broker authentication)
+- Authentication method used
+- Broker capabilities
 
-**Note**: Credentials are managed by the Azure SDK and are not stored directly in the config file.
+**Note**: Actual credentials are managed securely by the Azure SDK and are not stored in plain text.
 
 ## Command Structure
-
-The CLI follows a hierarchical command structure similar to Azure CLI:
 
 ```
 mycli
 ├── resource
-│   ├── create
-│   ├── list
-│   └── delete
+│   ├── create          # Create a new resource
+│   ├── list            # List all resources
+│   └── delete          # Delete a resource
 ├── config
-│   ├── set
-│   └── show
-├── login
-├── logout
-├── whoami
-├── account
-├── status
-├── --help
-└── --version
+│   ├── set             # Set configuration value
+│   └── show            # Show configuration
+├── login               # Authenticate with Azure
+├── logout              # Sign out from Azure
+├── whoami              # Show current user
+├── account             # Show account information
+├── broker              # Show broker capabilities
+├── status              # Show system status
+├── clear-cache         # Clear authentication cache
+├── --help              # Show help
+└── --version           # Show version
 ```
 
-## Example Session with Azure Authentication
+## Development
+
+### Setting up Development Environment
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/naga-nandyala/mycli-app.git
+   cd mycli-app
+   ```
+
+2. **Install in development mode**:
+   ```bash
+   pip install -e .[dev]
+   ```
+
+3. **Run tests**:
+   ```bash
+   pytest
+   ```
+
+4. **Format code**:
+   ```bash
+   black src/
+   ```
+
+5. **Type checking**:
+   ```bash
+   mypy src/
+   ```
+
+### Building and Publishing
+
+1. **Build the package**:
+   ```bash
+   python -m build
+   ```
+
+2. **Upload to PyPI** (requires credentials):
+   ```bash
+   twine upload dist/*
+   ```
+
+## Configuration Options
+
+The package supports multiple installation configurations:
+
+| Installation | Command | Features |
+|-------------|---------|----------|
+| Basic | `pip install mycli-app` | Core CLI functionality |
+| Azure | `pip install mycli-app[azure]` | + Azure authentication |
+| Broker | `pip install mycli-app[broker]` | + Enhanced Windows authentication |
+| Development | `pip install mycli-app[dev]` | + Testing and development tools |
+
+## Requirements
+
+- **Python**: 3.8 or higher
+- **Operating System**: Windows, macOS, or Linux
+- **Optional**: Azure subscription for authentication features
+
+### Core Dependencies
+- `click>=8.0.0` - Command-line interface framework
+- `colorama>=0.4.0` - Cross-platform colored terminal output
+
+### Optional Dependencies
+- `azure-identity>=1.12.0` - Azure authentication
+- `azure-mgmt-core>=1.3.0` - Azure management
+- `azure-core>=1.24.0` - Azure core functionality
+- `msal>=1.20.0` - Microsoft Authentication Library
+
+## Example Session
 
 ```bash
-$ python mycli.py status
+$ mycli status
 📊 System Status:
   Service: Online
   Authentication: Not Authenticated (None)
   Azure SDK: Available
   Version: 1.0.0
 
-$ python mycli.py login
+$ mycli login
 🔐 Starting Azure authentication...
 ✓ Successfully authenticated!
   User: your.email@domain.com
 
-$ python mycli.py whoami
-Current Authentication:
-  User: your.email@domain.com
-  Display Name: Your Name
-  Tenant: common
-  Status: Authenticated
-  Azure SDK: Available
-
-$ python mycli.py resource create --name "test-vm" --type "vm"
+$ mycli resource create --name "test-vm" --type "vm"
 ✓ Creating vm resource...
   Name: test-vm
   Location: eastus
   Type: vm
 ✓ Resource 'test-vm' created successfully!
 
-$ python mycli.py logout
-� Logging out...
+$ mycli resource list
+📋 Listing resources...
+
+Name            Type       Location   Status    
+--------------------------------------------------
+myvm-001        vm         eastus     running   
+mystorage-001   storage    westus     active    
+mydb-001        database   eastus     running   
+test-vm         vm         eastus     running   
+
+$ mycli logout
+👋 Logging out...
 ✓ Successfully logged out!
-💡 Note: You may need to clear your browser cache for complete logout.
 ```
-
-## Dependencies
-
-- **click**: For building the command-line interface
-- **colorama**: For cross-platform colored terminal output
-- **azure-identity**: For Azure authentication
-- **azure-mgmt-core**: For Azure management operations
-- **azure-core**: Core Azure SDK functionality
-- **msal**: Microsoft Authentication Library
 
 ## Error Handling
 
 The application includes comprehensive error handling for:
-- Missing Azure SDK packages
-- Authentication failures
-- Network connectivity issues
-- Invalid tenant IDs
-- Permission issues
+- ❌ Missing Azure SDK packages
+- ❌ Authentication failures  
+- ❌ Network connectivity issues
+- ❌ Invalid tenant IDs
+- ❌ Permission issues
+- ❌ Configuration problems
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-MIT License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- 📖 [Documentation](https://github.com/naga-nandyala/mycli-app#readme)
+- 🐛 [Bug Reports](https://github.com/naga-nandyala/mycli-app/issues)
+- 💬 [Discussions](https://github.com/naga-nandyala/mycli-app/discussions)
+
+---
+
+**Made with ❤️ for the CLI community**
