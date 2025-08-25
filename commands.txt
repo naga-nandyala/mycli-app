@@ -1,0 +1,6 @@
+python mycli.py logout
+python mycli.py clear-cache --all
+python mycli.py login --force-broker
+
+
+mycli logout
