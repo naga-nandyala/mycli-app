@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mycli-app"
+name = "mycli-app-naga"
 dynamic = ["version"]
 description = "A simple CLI application similar to Azure CLI with Azure authentication capabilities"
 readme = "README.md"
