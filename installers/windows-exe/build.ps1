@@ -1,15 +1,15 @@
-# Build script for MyCliApp Windows ZIP installer
-# Mimics Azure CLI Windows ZIP package creation
+# Build script for MyCliApp Windows EXE installer
+# Mimics Azure CLI Windows EXE package creation
 
 param(
     [string]$Version = "1.0.0",
-    [string]$OutputDir = ".\installers\windows-zip\dist",
+    [string]$OutputDir = ".\installers\windows-exe\dist",
     [switch]$Clean = $false
 )
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== MyCliApp Windows ZIP Builder ===" -ForegroundColor Cyan
+Write-Host "=== MyCliApp Windows EXE Builder ===" -ForegroundColor Cyan
 Write-Host "Version: $Version" -ForegroundColor Green
 
 # Get script directory and project root
@@ -17,7 +17,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 
 Write-Host "Project Root: $ProjectRoot" -ForegroundColor Yellow
-Write-Host "Building Windows ZIP package..." -ForegroundColor Yellow
+Write-Host "Building Windows EXE package..." -ForegroundColor Yellow
 
 # Change to project root
 Push-Location $ProjectRoot
@@ -27,7 +27,7 @@ try {
     if ($Clean -or (Test-Path $OutputDir)) {
         Write-Host "Cleaning previous builds..." -ForegroundColor Yellow
         Remove-Item -Path $OutputDir -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path ".\installers\windows-zip\build" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path ".\installers\windows-exe\build" -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item -Path ".\dist" -Recurse -Force -ErrorAction SilentlyContinue
     }
 
@@ -53,7 +53,7 @@ try {
 
     # Build executable with PyInstaller
     Write-Host "Building executable with PyInstaller..." -ForegroundColor Green
-    $SpecFile = ".\installers\windows-zip\mycli.spec"
+    $SpecFile = ".\installers\windows-exe\mycli.spec"
     
     # Run PyInstaller
     pyinstaller --clean --distpath $OutputDir $SpecFile
@@ -73,7 +73,7 @@ try {
     $ZipDir = Join-Path $OutputDir "MyCliApp-Windows-x64"
     $AppDir = Join-Path $ZipDir "mycli"
     
-    Write-Host "Creating ZIP package structure..." -ForegroundColor Green
+    Write-Host "Creating EXE package structure..." -ForegroundColor Green
     New-Item -ItemType Directory -Path $ZipDir -Force | Out-Null
     
     # Copy executable and dependencies
@@ -128,7 +128,7 @@ pause
 
     # Create README for ZIP package
     $ZipReadme = @"
-# MyCliApp Windows ZIP Package
+# MyCliApp Windows EXE Package
 
 This package contains a standalone Windows build of MyCliApp.
 

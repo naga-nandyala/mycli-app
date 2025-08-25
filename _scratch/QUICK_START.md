@@ -19,10 +19,10 @@ This guide helps you build and distribute MyCliApp as a standalone Windows ZIP p
 cd c:\dev_win\gitrepos_win\lrn_explore\pkg_related\pj1
 
 # Build with default settings
-.\installers\windows-zip\build.ps1
+.\installers\windows-exe\build.ps1
 
 # Build with custom version and clean build
-.\installers\windows-zip\build.ps1 -Version "1.0.1" -Clean
+.\installers\windows-exe\build.ps1 -Version "1.0.1" -Clean
 ```
 
 ### Method 2: Manual Build
@@ -36,7 +36,7 @@ python -m pip install --upgrade pip pyinstaller
 python -m pip install -e .[azure,broker]
 
 # Build with PyInstaller
-pyinstaller --clean .\installers\windows-zip\mycli.spec
+pyinstaller --clean .\installers\windows-exe\mycli.spec
 ```
 
 ## What Gets Created
@@ -44,7 +44,7 @@ pyinstaller --clean .\installers\windows-zip\mycli.spec
 The build process creates:
 
 ```text
-installers\windows-zip\dist\
+installers\windows-exe\dist\
 ├── MyCliApp-1.0.0-Windows-x64.zip     # Final distribution ZIP
 └── mycli\                             # Standalone executable folder
     ├── mycli.exe                      # Main executable
@@ -126,7 +126,7 @@ This approach mimics Azure CLI's Windows ZIP installation method:
 
 ### Change Version Info
 
-Edit `installers\windows-zip\version_info.txt`:
+Edit `installers\windows-exe\version_info.txt`:
 - Update version numbers
 - Change company/product names
 - Modify descriptions

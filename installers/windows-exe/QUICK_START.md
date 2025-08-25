@@ -1,8 +1,8 @@
-# MyCliApp Windows ZIP Package - Quick Start
+# MyCliApp Windows EXE Package - Quick Start
 
 ## Overview
 
-This guide helps you build and distribute MyCliApp as a standalone Windows ZIP package, similar to Azure CLI's installation approach.
+This guide helps you build and distribute MyCliApp as a standalone Windows EXE package, similar to Azure CLI's installation approach.
 
 ## Prerequisites
 
@@ -19,10 +19,10 @@ This guide helps you build and distribute MyCliApp as a standalone Windows ZIP p
 cd /path/to/your/project
 
 # Build with default settings
-.\installers\windows-zip\build.ps1
+.\installers\windows-exe\build.ps1
 
 # Build with custom version and clean build
-.\installers\windows-zip\build.ps1 -Version "1.0.1" -Clean
+.\installers\windows-exe\build.ps1 -Version "1.0.1" -Clean
 ```
 
 ### Method 2: Manual Build
@@ -36,7 +36,7 @@ python -m pip install --upgrade pip pyinstaller
 python -m pip install -e .[azure,broker]
 
 # Build with PyInstaller (creates single executable)
-pyinstaller --clean --distpath .\installers\windows-zip\dist .\installers\windows-zip\mycli.spec
+pyinstaller --clean --distpath .\installers\windows-exe\dist .\installers\windows-exe\mycli.spec
 ```
 
 ## What Gets Created
@@ -44,7 +44,7 @@ pyinstaller --clean --distpath .\installers\windows-zip\dist .\installers\window
 The build process creates:
 
 ```text
-installers\windows-zip\dist\
+installers\windows-exe\dist\
 ├── MyCliApp-1.0.0-Windows-x64.zip     # Final distribution ZIP
 └── mycli.exe                          # Standalone executable
 ```
@@ -100,7 +100,8 @@ mycli auth login
 
 ## Similar to Azure CLI
 
-This approach mimics Azure CLI's Windows ZIP installation method:
+This approach mimics Azure CLI's Windows EXE installation method:
+
 - Standalone executable bundle
 - No system modifications required
 - User-controlled installation location
@@ -124,28 +125,32 @@ This approach mimics Azure CLI's Windows ZIP installation method:
 
 ### Change Version Info
 
-Edit `installers\windows-zip\version_info.txt`:
+Edit `installers\windows-exe\version_info.txt`:
+
 - Update version numbers
 - Change company/product names
 - Modify descriptions
 
 ### Modify Build Settings
 
-Edit `installers\windows-zip\mycli.spec`:
+Edit `installers\windows-exe\mycli.spec`:
+
 - Add/remove dependencies
 - Change exclusions for size optimization
 - Add application icon
 
 ### Custom Build Script
 
-Modify `installers\windows-zip\build.ps1`:
+Modify `installers\windows-exe\build.ps1`:
+
 - Add signing steps
 - Include additional files
 - Customize ZIP structure
 
 ## Next Steps
 
-After mastering Windows ZIP distribution, you can expand to other Azure CLI-inspired methods:
+After mastering Windows EXE distribution, you can expand to other Azure CLI-inspired methods:
+
 - Windows MSI installer
 - PowerShell module
 - Chocolatey package
