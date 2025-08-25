@@ -35,11 +35,12 @@ try {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
     # Activate virtual environment if it exists
-    if (Test-Path ".\venv\Scripts\Activate.ps1") {
+    if (Test-Path ".\.venv\Scripts\Activate.ps1") {
         Write-Host "Activating virtual environment..." -ForegroundColor Green
-        & ".\venv\Scripts\Activate.ps1"
+        & ".\.venv\Scripts\Activate.ps1"
     } else {
-        Write-Host "No virtual environment found - using system Python" -ForegroundColor Yellow
+        Write-Host "No virtual environment found - create .venv at root of project directory" -ForegroundColor Yellow
+        exit
     }
 
     # Install/upgrade build dependencies
