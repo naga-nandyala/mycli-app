@@ -26,10 +26,57 @@ ZIP filename pattern: `MyCliApp-<version>-<os>-<arch>.zip` (e.g. `MyCliApp-1.2.3
   OS (Windows vs Linux vs macOS) — the virtual environment is not cross‑platform.
 * Project root installable via `pip install .` (PEP 517/518). Extras declared in `pyproject.toml` if you plan to include them.
 
+### Platform-Specific Build Requirements
+
+**Windows:**
+
+```powershell
+# Ensure Python 3.12+ and pip are available
+python --version
+pip --version
+```
+
+**Linux:**
+
+```bash
+# Install Python and development tools
+sudo apt update
+sudo apt install python3.12 python3.12-venv python3.12-dev python3-pip
+# Or on RHEL/CentOS/Fedora:
+# sudo dnf install python3.12 python3.12-devel python3-pip
+
+# Verify installation
+python3.12 --version
+pip --version
+```
+
+**macOS:**
+
+```bash
+# Using Homebrew
+brew install python@3.12
+python3.12 --version
+pip --version
+```
+
 ## Basic Build Command
+
+**Windows:**
 
 ```powershell
 python packaging/standalone_zip/build_zip.py
+```
+
+**Linux:**
+
+```bash
+python3.12 packaging/standalone_zip/build_zip.py
+```
+
+**macOS:**
+
+```bash
+python3.12 packaging/standalone_zip/build_zip.py
 ```
 
 This uses defaults:
@@ -85,6 +132,43 @@ bin/mycli.sh status
 
 You may add the `bin` directory to PATH for convenience.
 
+## Cross-Platform Building
+
+To create distributions for multiple platforms, build on each target platform:
+
+### Building for Windows (on Windows)
+
+```powershell
+# Create Windows distribution
+python packaging/standalone_zip/build_zip.py --version 1.0.0
+# Output: MyCliApp-1.0.0-windows-x64.zip
+```
+
+### Building for Linux (on Linux)
+
+```bash
+# Create Linux distribution  
+python3.12 packaging/standalone_zip/build_zip.py --version 1.0.0
+# Output: MyCliApp-1.0.0-linux-x64.zip
+
+# For different architectures, build on target hardware:
+# ARM64: MyCliApp-1.0.0-linux-arm64.zip
+# x86: MyCliApp-1.0.0-linux-x86.zip
+```
+
+### Building for macOS (on macOS)
+
+```bash
+# Create macOS distribution
+python3.12 packaging/standalone_zip/build_zip.py --version 1.0.0
+# Output: MyCliApp-1.0.0-darwin-x64.zip (Intel)
+# Output: MyCliApp-1.0.0-darwin-arm64.zip (Apple Silicon)
+```
+
+### Using CI/CD for Multi-Platform Builds
+
+You can automate this process using GitHub Actions or similar CI/CD systems to build on multiple platforms simultaneously.
+
 ## How It Works (High Level)
 
 1. Creates a temporary venv (`.build_zip_tmp/venv`).
@@ -104,10 +188,54 @@ project version and replace the extracted folder (or distribute the new ZIP).
 
 ## Troubleshooting
 
+### General Issues
+
 * If imports fail during verification, ensure extras names are correct and
   that `pyproject.toml` defines them.
 * Use `--upgrade-tools` if installation fails due to outdated pip/wheel.
 * Use `--skip-prune` while debugging to keep full package contents.
+
+### Linux-Specific Issues
+
+**Python version conflicts:**
+
+```bash
+# If 'python' points to Python 2.x, use python3.12 explicitly
+which python3.12
+python3.12 --version
+
+# Create alias for convenience
+alias python=python3.12
+```
+
+**Missing development packages:**
+
+```bash
+# Ubuntu/Debian - install development headers
+sudo apt install python3.12-dev build-essential
+
+# RHEL/CentOS/Fedora
+sudo dnf install python3.12-devel gcc
+```
+
+**Permission issues:**
+
+```bash
+# Ensure build directory is writable
+chmod 755 packaging/standalone_zip/
+ls -la packaging/standalone_zip/
+```
+
+**Virtual environment creation fails:**
+
+```bash
+# Ensure venv module is available
+python3.12 -m venv --help
+
+# If missing, install python3-venv
+sudo apt install python3.12-venv  # Ubuntu/Debian
+sudo dnf install python3-venv     # RHEL/Fedora
+```
 
 ## See Also
 

@@ -147,6 +147,7 @@ def write_launchers(dist_root: Path, venv_dir: Path) -> None:
                 f"""@echo off
             set DIR=%~dp0
             set PY={python_rel}
+            set PYTHONWARNINGS=ignore::RuntimeWarning
             "%~dp0{python_rel}" -m mycli_app.cli %*
             """  # noqa: E501
             ).strip()
@@ -163,6 +164,7 @@ def write_launchers(dist_root: Path, venv_dir: Path) -> None:
         # Portable launcher for MyCliApp (POSIX)
     SCRIPT_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" >/dev/null 2>&1 && pwd )"
         PY="$SCRIPT_DIR/{python_rel_unix}"
+        export PYTHONWARNINGS=ignore::RuntimeWarning
         exec "$PY" -m mycli_app.cli "$@"
         """
         ).strip()
