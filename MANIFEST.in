@@ -4,20 +4,26 @@ include LICENSE
 include CHANGELOG.md
 include requirements.txt
 include pyproject.toml
-include setup.py
 
 # Include source files and packages
 recursive-include src *.py
-recursive-include src *.pyi
+
+# Include package data files if any
+# recursive-include src/mycli_app *.json
+# recursive-include src/mycli_app *.yaml
+# recursive-include src/mycli_app *.txt
 
 # Exclude development and build files
 exclude .gitignore
-exclude .github/*
-exclude .vscode/*
-exclude tests/*
-exclude _scratch/*
-prune .git
-prune __pycache__
-prune *.egg-info
-prune build
-prune dist
+global-exclude .github/*
+global-exclude .vscode/*
+global-exclude tests/*
+global-exclude _scratch/*
+global-exclude .git/*
+global-exclude __pycache__/*
+global-exclude *.egg-info/*
+global-exclude build/*
+global-exclude dist/*
+global-exclude .venv/*
+global-exclude *.pyc
+global-exclude *.pyo
