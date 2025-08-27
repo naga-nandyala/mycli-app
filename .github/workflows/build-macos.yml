@@ -1,0 +1,150 @@
+name: Build macOS Distributions
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - zip
+          - app
+          - dmg
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          
+      - name: Install system dependencies
+        run: |
+          # Install create-dmg for DMG creation
+          brew install create-dmg
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[azure,broker]"
+          
+      - name: Verify installation
+        run: |
+          python -m mycli_app.cli --version
+          python -m mycli_app.cli status
+          
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+          
+      - name: Determine build type
+        id: build_type
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            BUILD_TYPE="all"
+          else
+            BUILD_TYPE="${{ github.event.inputs.build_type }}"
+          fi
+          echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
+          echo "Building type: $BUILD_TYPE"
+          
+      - name: Build macOS distributions
+        run: |
+          chmod +x packaging/macos/build_macos.sh
+          ./packaging/macos/build_macos.sh ${{ steps.build_type.outputs.build_type }} ${{ steps.version.outputs.version }}
+          
+      - name: List build outputs
+        run: |
+          echo "Build outputs:"
+          ls -la dist_macos/
+          
+      - name: Upload ZIP artifact
+        if: steps.build_type.outputs.build_type == 'all' || steps.build_type.outputs.build_type == 'zip'
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-zip-${{ steps.version.outputs.version }}
+          path: dist_macos/*.zip
+          retention-days: 30
+          
+      - name: Upload App Bundle artifact
+        if: steps.build_type.outputs.build_type == 'all' || steps.build_type.outputs.build_type == 'app'
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-app-${{ steps.version.outputs.version }}
+          path: dist_macos/*.app
+          retention-days: 30
+          
+      - name: Upload DMG artifact
+        if: steps.build_type.outputs.build_type == 'all' || steps.build_type.outputs.build_type == 'dmg'
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-dmg-${{ steps.version.outputs.version }}
+          path: dist_macos/*.dmg
+          retention-days: 30
+          
+      - name: Create Release (for tags)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist_macos/*.zip
+            dist_macos/*.dmg
+          draft: true
+          prerelease: false
+          generate_release_notes: true
+          name: MyCliApp ${{ steps.version.outputs.version }} (macOS)
+          body: |
+            ## MyCliApp ${{ steps.version.outputs.version }} - macOS Distribution
+            
+            This release contains macOS-specific distributions of MyCliApp.
+            
+            ### Downloads
+            
+            - **ZIP Package**: Cross-platform standalone package with embedded Python
+            - **DMG Installer**: Native macOS installer for easy installation
+            
+            ### Installation Instructions
+            
+            **From ZIP:**
+            1. Download and extract the ZIP file
+            2. Run: `chmod +x bin/mycli.sh`
+            3. Use: `bin/mycli.sh --help`
+            
+            **From DMG:**
+            1. Download and open the DMG file
+            2. Drag MyCliApp to the Applications folder
+            3. Launch from Applications or add to PATH
+            
+            ### System Requirements
+            
+            - macOS 10.14 or later
+            - No additional Python installation required (embedded)
+            
+            Built on: ${{ runner.os }}
+            Build date: $(date -u)
+            Commit: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
