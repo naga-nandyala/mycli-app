@@ -7,3 +7,6 @@ python mycli.py login --use-broker --tenant "7480ecd1-4b07-4b58-b5b1-151bbd407f1
 
 # webpage based
 python mycli.py login  --tenant "7480ecd1-4b07-4b58-b5b1-151bbd407f11"
+
+
+ az config set core.enable_broker_on_windows=true
