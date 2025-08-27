@@ -1,0 +1,26 @@
+class Mycli < Formula
+  desc "CLI tool similar to Azure CLI for cloud management"
+  homepage "https://github.com/naga-nandyala/mycli-app"
+  url "https://github.com/naga-nandyala/mycli-app/archive/v#{version}.tar.gz"
+  sha256 "REPLACE_WITH_ACTUAL_SHA256"
+  license "MIT"
+  head "https://github.com/naga-nandyala/mycli-app.git", branch: "main"
+
+  depends_on "python@3.12"
+
+  def install
+    # Create virtual environment
+    venv = virtualenv_create(libexec, "python3.12")
+    
+    # Install package and dependencies
+    venv.pip_install buildpath
+    
+    # Create wrapper script that uses the virtual environment
+    (bin/"mycli").write_env_script libexec/"bin/mycli", {}
+  end
+
+  test do
+    assert_match "MyCliApp", shell_output("#{bin}/mycli --version")
+    assert_match "status", shell_output("#{bin}/mycli --help")
+  end
+end
