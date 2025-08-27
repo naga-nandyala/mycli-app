@@ -83,7 +83,7 @@ jobs:
           
       - name: Upload ZIP artifact
         if: steps.build_type.outputs.build_type == 'all' || steps.build_type.outputs.build_type == 'zip'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-zip-${{ steps.version.outputs.version }}
           path: dist_macos/*.zip
@@ -91,7 +91,7 @@ jobs:
           
       - name: Upload App Bundle artifact
         if: steps.build_type.outputs.build_type == 'all' || steps.build_type.outputs.build_type == 'app'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-app-${{ steps.version.outputs.version }}
           path: dist_macos/*.app
@@ -99,7 +99,7 @@ jobs:
           
       - name: Upload DMG artifact
         if: steps.build_type.outputs.build_type == 'all' || steps.build_type.outputs.build_type == 'dmg'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-dmg-${{ steps.version.outputs.version }}
           path: dist_macos/*.dmg
