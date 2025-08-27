@@ -1,152 +1,65 @@
 # MyCliApp
 
-A simple Python CLI application similar to Azure CLI with dummy commands for demonstration purposes.
+A simple CLI application similar to Azure CLI with Azure authentication capabilities.
 
 ## Features
 
-- **Resource Management**: Create, list, and delete resources (dummy operations)
-- **Configuration Management**: Set and view configuration settings
-- **Authentication**: Simulate login/logout operations
-- **Status Monitoring**: Check system status and health
-- **Colorized Output**: Enhanced terminal output with colors and icons
-- **Cross-platform**: Works on Windows, macOS, and Linux
+- 🔐 Azure authentication with multiple methods (browser, device code, broker)
+- 🌟 Windows Hello and Microsoft Authenticator support
+- 📊 Resource management commands
+- ⚙️ Configuration management
+- 🎨 Colored terminal output
+- 📦 Cross-platform support
 
 ## Installation
 
-1. Clone or download this repository
-2. Navigate to the project directory
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Usage
-
-### Basic Commands
-
+### From PyPI (when published)
 ```bash
-# Show help
-python mycli.py --help
-
-# Show version
-python mycli.py --version
-
-# Show status
-python mycli.py status
+pip install mycli-app-naga
 ```
 
-### Resource Management
-
+### From Source
 ```bash
-# Create a resource
-python mycli.py resource create --name "my-vm" --location "eastus" --type "vm"
-
-# List all resources
-python mycli.py resource list
-
-# List resources by location
-python mycli.py resource list --location "eastus"
-
-# List resources by type
-python mycli.py resource list --type "vm"
-
-# Delete a resource (with confirmation)
-python mycli.py resource delete "my-vm"
-```
-
-### Configuration Management
-
-```bash
-# Set a configuration value
-python mycli.py config set --key "default_location" --value "westus"
-
-# Show all configuration
-python mycli.py config show
-
-# Show specific configuration key
-python mycli.py config show --key "default_location"
-```
-
-### Authentication
-
-```bash
-# Simulate login
-python mycli.py login
-
-# Simulate logout
-python mycli.py logout
-```
-
-## Installation as Package
-
-To install this as a system-wide command:
-
-```bash
+git clone https://github.com/naga-nandyala/mycli-app.git
+cd mycli-app
 pip install -e .
 ```
 
-After installation, you can use the `mycli` command directly:
+## Quick Start
 
 ```bash
-mycli --help
-mycli resource list
+# Check version
+mycli --version
+
+# Show status
 mycli status
+
+# Authenticate with Azure
+mycli login
+
+# List resources
+mycli resource list
+
+# Get help
+mycli --help
 ```
 
-## Command Structure
+## Authentication Methods
 
-The CLI follows a hierarchical command structure similar to Azure CLI:
+- **Browser Authentication**: Default method
+- **Device Code Flow**: For headless systems
+- **Broker Authentication**: Windows Hello, Microsoft Authenticator
+- **Azure CLI Integration**: Uses existing Azure CLI credentials
 
-```
-mycli
-├── resource
-│   ├── create
-│   ├── list
-│   └── delete
-├── config
-│   ├── set
-│   └── show
-├── login
-├── logout
-├── status
-├── --help
-└── --version
-```
+## Requirements
 
-## Example Session
-
-```bash
-$ python mycli.py
-Welcome to MyCliApp!
-Use 'mycli --help' to see available commands.
-
-$ python mycli.py resource create --name "test-vm" --type "vm"
-✓ Creating vm resource...
-  Name: test-vm
-  Location: eastus
-  Type: vm
-✓ Resource 'test-vm' created successfully!
-
-$ python mycli.py resource list
-📋 Listing resources...
-
-Name            Type       Location   Status    
---------------------------------------------------
-myvm-001        vm         eastus     running   
-mystorage-001   storage    westus     active    
-mydb-001        database   eastus     running   
-
-$ python mycli.py login
-🔐 Opening browser for authentication...
-✓ Successfully logged in!
-  User: user@example.com
-```
-
-## Dependencies
-
-- **click**: For building the command-line interface
-- **colorama**: For cross-platform colored terminal output
+- Python 3.8+
+- Windows (for broker authentication features)
 
 ## License
 
-MIT License
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Development
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and changes.

@@ -1,0 +1,34 @@
+# UTF-8
+# Windows version information for MyCliApp
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 0, 0, 0),
+    prodvers=(1, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,  # Windows NT
+    fileType=0x1,  # Application
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+      StringTable(
+        u'040904B0',  # English (US)
+        [
+          StringStruct(u'CompanyName', u'Naga Nandyala'),
+          StringStruct(u'FileDescription', u'MyCliApp - Azure-like CLI Tool'),
+          StringStruct(u'FileVersion', u'1.0.0'),
+          StringStruct(u'InternalName', u'mycli'),
+          StringStruct(u'LegalCopyright', u'Copyright (c) 2025 Naga Nandyala'),
+          StringStruct(u'OriginalFilename', u'mycli.exe'),
+          StringStruct(u'ProductName', u'MyCliApp'),
+          StringStruct(u'ProductVersion', u'1.0.0'),
+          StringStruct(u'Comments', u'A comprehensive CLI tool for Azure resource management with authentication support')
+        ]
+      )
+      ]), 
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)

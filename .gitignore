@@ -232,3 +232,5 @@ yarn-error.log*
 # data/
 # output/
 # results/
+
+.build*

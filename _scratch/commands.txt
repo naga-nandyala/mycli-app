@@ -1,0 +1,9 @@
+python mycli.py logout
+# broker based
+python mycli.py login --use-broker --tenant "213e87ed-8e08-4eb4-a63c-c073058f7b00"
+
+
+python mycli.py login --use-broker --tenant "7480ecd1-4b07-4b58-b5b1-151bbd407f11"
+
+# webpage based
+python mycli.py login  --tenant "7480ecd1-4b07-4b58-b5b1-151bbd407f11"

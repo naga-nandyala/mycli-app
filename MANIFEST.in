@@ -1,0 +1,29 @@
+# Include documentation and metadata files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include requirements.txt
+include pyproject.toml
+
+# Include source files and packages
+recursive-include src *.py
+
+# Include package data files if any
+# recursive-include src/mycli_app *.json
+# recursive-include src/mycli_app *.yaml
+# recursive-include src/mycli_app *.txt
+
+# Exclude development and build files
+exclude .gitignore
+global-exclude .github/*
+global-exclude .vscode/*
+global-exclude tests/*
+global-exclude _scratch/*
+global-exclude .git/*
+global-exclude __pycache__/*
+global-exclude *.egg-info/*
+global-exclude build/*
+global-exclude dist/*
+global-exclude .venv/*
+global-exclude *.pyc
+global-exclude *.pyo

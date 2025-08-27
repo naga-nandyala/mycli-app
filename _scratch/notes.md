@@ -7,3 +7,8 @@ Virtual Mac Environments or CI Services: One popular workaround is to use a clou
 Manual .pkg Creation on Mac: If you can access a Mac temporarily (e.g., friends, rental, or virtual), you can create a .pkg by first bundling your Python app using py2app or PyInstaller for macOS, then package it using the productbuild or pkgbuild command-line tools native to macOS.
 
 Python's distutils and setup.py: Python's distutils can create Python packages but does not inherently create macOS .pkg installers. It handles Python module packaging more than full app installers.
+
+
+![alt text](image.png)
+
+![alt text](image-1.png)
