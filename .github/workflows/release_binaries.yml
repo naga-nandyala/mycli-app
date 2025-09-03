@@ -1,0 +1,84 @@
+# GitHub Actions workflow to build and release macOS binaries for mycli
+# Auto-created from macos_homebrew/workflow template.
+
+name: build-release-binaries
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    name: macOS ${{ matrix.arch }} build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: x86_64
+            runner: macos-13
+    env:
+      PYTHON_VERSION: '3.12'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+
+      - name: Build binary
+        run: |
+          python -m PyInstaller --name mycli --onefile src/mycli_app/cli.py
+
+      - name: Package
+        run: |
+          VERSION=$(grep '__version__' src/mycli_app/__init__.py | cut -d '"' -f2)
+          ARCH=${{ matrix.arch }}
+          cp dist/mycli mycli
+          chmod +x mycli
+          TAR_NAME="mycli-${VERSION}-macos-${ARCH}.tar.gz"
+          tar -czf "$TAR_NAME" mycli
+          shasum -a 256 "$TAR_NAME" > "$TAR_NAME.sha256"
+          echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TAR_NAME }}
+          path: |
+            ${{ env.TAR_NAME }}
+            ${{ env.TAR_NAME }}.sha256
+
+  release:
+    needs: build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display artifacts
+        run: ls -R artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir upload
+          find artifacts -name '*.tar.gz' -exec cp {} upload/ \;
+          find artifacts -name '*.sha256' -exec cp {} upload/ \;
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: upload/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
