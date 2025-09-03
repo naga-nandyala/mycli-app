@@ -1,90 +1,96 @@
-# Maintainer Release Guide (Homebrew Binary Path)
+# Maintainer Release Guide (Single Repository)
 
 ## Prerequisites
 
-* Tap repository created: `homebrew-mycli` (e.g. <https://github.com/naga-nandyala/homebrew-mycli>)
-* This repository contains workflow `build-release-binaries` (copy from `macos_homebrew/workflow/release_binaries.yml`).
-* Version updated in `src/mycli_app/__init__.py`.
-* Git tag will follow `vX.Y.Z`.
+* Formula location: `Formula/mycli.rb` in this repository
+* This repository contains automated workflows for building and formula updates
+* Version updated in `src/mycli_app/__init__.py`
+* Git tag follows `vX.Y.Z` format
 
-## Steps
+## Automated Release Process
 
-1. Update version constant:
-   * Edit `src/mycli_app/__init__.py` `__version__ = "X.Y.Z"`.
-   * Commit.
-
-2. Tag & push:
-
-   ```bash
-   git tag vX.Y.Z
-   git push origin vX.Y.Z
-   ```
-
-3. Wait for GitHub Actions to finish (it uploads release assets automatically):
-   * Assets: `mycli-X.Y.Z-macos-arm64.tar.gz`, `mycli-X.Y.Z-macos-x86_64.tar.gz` (and `.sha256` files).
-
-4. Compute / verify sha256 (already generated). If using a universal binary skip split arch formula.
-
-5. In the tap repo:
-   * Choose template: `mycli_split_arch.rb` or `mycli_universal.rb`.
-   * Update `version`, `url`(s) and `sha256` placeholders.
-   * Commit as `Formula/mycli.rb`.
-
-6. Test end-to-end:
-
-   ```bash
-   brew uninstall mycli || true
-   brew untap naga-nandyala/mycli || true
-   brew tap naga-nandyala/mycli
-   brew install mycli
-   mycli --version
-   ```
-
-7. Publish instructions in main README (Install section).
-
-## Optional: Universal Binary
-
-After both arch builds:
-
+### 1. Update Version
 ```bash
-   # On a mac with both binaries (rename them accordingly)
-   lipo -create mycli-arm64 mycli-x86_64 -output mycli
-   chmod +x mycli
-   VERSION=X.Y.Z
-   tar -czf mycli-${VERSION}-macos-universal.tar.gz mycli
-   shasum -a 256 mycli-${VERSION}-macos-universal.tar.gz
+# Edit version in source
+vim src/mycli_app/__init__.py  # Update __version__ = "X.Y.Z"
+git add . && git commit -m "Bump version to X.Y.Z"
 ```
 
-Upload universal tarball, then use `mycli_universal.rb` template.
+### 2. Create Release
+```bash
+# Create and push tag
+git tag vX.Y.Z
+git push origin vX.Y.Z
 
-## Automating Tap Updates
+# Create GitHub release (triggers automation)
+gh release create vX.Y.Z --title "Release vX.Y.Z" --notes "Release notes here"
+```
 
-Consider a separate workflow reacting to `release` event:
+### 3. Automation Handles
+- ✅ **Binary Building**: GitHub Actions builds macOS binaries (ARM64 + x86_64)
+- ✅ **Formula Update**: Automatically updates `Formula/mycli.rb` with new SHA256 hashes
+- ✅ **Release Upload**: Binaries and SHA256 files uploaded to GitHub release
 
-* Clone tap repo
-* Download `.sha256` files
-* Update formula using `sed` and commit
-* Push PR / direct commit
+## Manual Formula Update (if needed)
+
+If automation fails, manually update the formula:
+
+```bash
+# Run the update script
+cd macos_homebrew
+python update_formula.py
+```
+
+## Installation Testing
+
+Test the updated formula:
+
+```bash
+# Uninstall existing version
+brew uninstall mycli 2>/dev/null || true
+
+# Install from your repository
+brew install naga-nandyala/mycli-app/mycli
+
+# Verify installation
+mycli --version
+```
+
+## Manual Process (Backup)
+
+If automation completely fails:
+
+1. **Download release assets manually**
+2. **Calculate SHA256**:
+   ```bash
+   shasum -a 256 mycli-X.Y.Z-macos-arm64.tar.gz
+   shasum -a 256 mycli-X.Y.Z-macos-x86_64.tar.gz
+   ```
+3. **Update `Formula/mycli.rb`** with new version and SHA256 values
+4. **Commit and push**
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| Binary blocked by Gatekeeper | Sign & notarize (not covered here) |
-| "Bad CPU type" on Intel | Ensure Intel build (macos-13 runner) exists |
-| Missing Azure auth libs | Rebuild with `MYCLI_WITH_AZURE=1` env var + updated spec |
-| Formula hash mismatch | Redownload asset and recalc sha256 |
+| Problem | Solution |
+|---------|----------|
+| Binary blocked by Gatekeeper | Consider code signing & notarization |
+| "Bad CPU type" on Intel | Ensure Intel build exists in release |
+| Formula hash mismatch | Re-run `python update_formula.py` |
+| Automation failed | Check GitHub Actions logs and run manual update |
 
-## Code Signing (Optional)
+## Repository Structure
 
-1. Import Developer ID cert in CI (secrets for cert + password).
-2. Add step before packaging:
-
-   ```bash
-   codesign --force --options runtime --sign "Developer ID Application: YOUR NAME (TEAMID)" dist/mycli
-   ```
-
-3. Notarize using `xcrun notarytool submit` (requires API key secrets) then `xcrun stapler staple dist/mycli`.
+```text
+mycli-app/
+├── Formula/
+│   └── mycli.rb              # 🍺 Homebrew formula (auto-updated)
+├── .github/workflows/
+│   ├── release_binaries.yml  # Builds macOS binaries
+│   └── update-homebrew-formula.yml  # Updates formula
+└── macos_homebrew/
+    ├── update_formula.py     # Manual formula update script
+    └── pyinstaller/          # Build configuration
+```
 
 ---
 
