@@ -1,13 +1,14 @@
-# PyInstaller spec file for building the mycli standalone binary
-# Usage (run on macOS for each architecture):
-#   pyinstaller mycli.spec
-# Package should be installed with extras: pip install -e .[azure,broker]
+# mycli.spec - fully updated PyInstaller spec for mycli-app-naga
+# Usage (macOS): pyinstaller mycli.spec
+# Recommended: build in a clean venv with extras installed:
+# pip install -e .[azure,broker]
 
 import os
 import importlib.util
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files
 
-# Toggle to include azure dependencies (increases size)
-INCLUDE_AZURE = True if os.environ.get("MYCLI_WITH_AZURE", "0") == "1" else False
+# Toggle Azure & Broker extras via environment variable
+INCLUDE_AZURE = os.environ.get("MYCLI_WITH_AZURE", "1") == "1"
 
 def can_import(module_name):
     """Check if a module can be imported"""
@@ -17,11 +18,14 @@ def can_import(module_name):
     except (ImportError, ValueError, ModuleNotFoundError):
         return False
 
+# ---------------------------
+# Hidden Imports
+# ---------------------------
 hiddenimports = []
+
 if INCLUDE_AZURE:
-    # Only add hidden imports for modules that are actually available
-    potential_imports = [
-        # Core MSAL modules that might be dynamically imported
+    optional_modules = [
+        # MSAL core modules
         "msal.application",
         "msal.oauth2cli", 
         "msal.token_cache",
@@ -35,7 +39,7 @@ if INCLUDE_AZURE:
         "azure.core.credentials",
         "azure.core.pipeline",
         "azure.core.pipeline.policies",
-        # PyMSAL Runtime (broker support)
+        # PyMSAL Runtime / broker support
         "pymsalruntime",
         "pymsalruntime.broker",
         "pymsalruntime.msalruntime",
@@ -43,48 +47,64 @@ if INCLUDE_AZURE:
         "cryptography.hazmat.backends.openssl",
         "cryptography.hazmat.bindings._rust",
     ]
-    
-    available_imports = []
-    for module in potential_imports:
-        if can_import(module):
-            available_imports.append(module)
+
+    for mod in optional_modules:
+        if can_import(mod):
+            hiddenimports.append(mod)
         else:
-            print(f"Warning: Module {module} not available, skipping hidden import")
-    
-    hiddenimports = available_imports
-    print(f"Adding {len(hiddenimports)} available Azure-specific hidden imports")
-    if hiddenimports:
-        print(f"Available imports: {hiddenimports}")
-    else:
-        print("Warning: No Azure modules found! Package may not be installed with extras.")
+            print(f"Warning: Optional module {mod} not found, skipping hidden import")
 
-block_cipher = None
+print(f"Hidden imports included ({len(hiddenimports)}): {hiddenimports}")
 
-"""Spec adjustments:
-We cannot rely on __file__ (not injected by PyInstaller exec). Use current working
-directory (expected repo root in CI). Fallback: ascend two levels if entry script
-not found initially (covers invocation from spec directory).
-"""
+# ---------------------------
+# Data Files
+# ---------------------------
+# Include any non-Python files your CLI needs
+datas = collect_data_files("mycli_app")  # collects all package data files
+# Add custom files if needed
+custom_datas = [
+    ("src/mycli_app/config.yaml", "."),
+    ("src/mycli_app/templates/*", "templates"),
+]
+datas.extend(custom_datas)
+
+# ---------------------------
+# Binaries
+# ---------------------------
+# Include compiled shared libraries
+binaries = collect_dynamic_libs("cryptography") + collect_dynamic_libs("pymsalruntime")
+
+# ---------------------------
+# Entry Script & Paths
+# ---------------------------
 PROJECT_ROOT = os.getcwd()
-entry_script = os.path.join(PROJECT_ROOT, 'src', 'mycli_app', 'cli.py')
+entry_script = os.path.join(PROJECT_ROOT, "src", "mycli_app", "cli.py")
 if not os.path.exists(entry_script):
-    # Try going two levels up (running from spec dir scenario)
-    alt_root = os.path.abspath(os.path.join(PROJECT_ROOT, '..', '..'))
-    candidate = os.path.join(alt_root, 'src', 'mycli_app', 'cli.py')
+    # fallback if running from spec directory
+    alt_root = os.path.abspath(os.path.join(PROJECT_ROOT, "..", ".."))
+    candidate = os.path.join(alt_root, "src", "mycli_app", "cli.py")
     if os.path.exists(candidate):
         PROJECT_ROOT = alt_root
         entry_script = candidate
+    else:
+        raise FileNotFoundError(f"Cannot find entry script at {entry_script}")
 
 pathex = [PROJECT_ROOT]
+
+# ---------------------------
+# PyInstaller Analysis
+# ---------------------------
+block_cipher = None
+
+from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
 
 a = Analysis(
     [entry_script],
     pathex=pathex,
-    binaries=[],
-    datas=[],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
@@ -92,6 +112,7 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
@@ -99,13 +120,14 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='mycli',
+    name="mycli",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
     console=True,
 )
+
 coll = COLLECT(
     exe,
     a.binaries,
@@ -114,5 +136,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='mycli'
+    name="mycli",
 )
