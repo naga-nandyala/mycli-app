@@ -81,6 +81,116 @@ jobs:
           echo "PyInstaller build finished. Contents of dist/:"
           ls -R dist
 
+      - name: Verify Azure/Broker dependencies in binary
+        run: |
+          echo "=== Dependency Verification ==="
+          echo "Checking if all pyproject.toml [azure,broker] dependencies are bundled..."
+          
+          # Define expected dependencies from pyproject.toml
+          AZURE_DEPS=(
+            "azure-identity"
+            "azure-mgmt-core" 
+            "azure-core"
+            "msal"
+          )
+          
+          BROKER_DEPS=(
+            "azure-identity"
+            "azure-mgmt-core"
+            "azure-core" 
+            "msal"
+            "pymsalruntime"  # from msal[broker]
+          )
+          
+          # Additional expected sub-dependencies
+          EXPECTED_MODULES=(
+            "azure.identity"
+            "azure.core"
+            "azure.mgmt.core"
+            "msal"
+            "msal.application"
+            "msal.oauth2cli"
+            "msal.token_cache"
+            "pymsalruntime"
+            "cryptography"
+            "requests"
+            "certifi"
+            "urllib3"
+            "jwt"  # from PyJWT
+          )
+          
+          if [ -f dist/mycli/_internal/base_library.zip ]; then
+            LIBRARY_ZIP="dist/mycli/_internal/base_library.zip"
+          elif [ -f dist/mycli/base_library.zip ]; then
+            LIBRARY_ZIP="dist/mycli/base_library.zip"
+          else
+            echo "❌ Could not find base_library.zip"
+            exit 1
+          fi
+          
+          echo "Checking dependencies in: $LIBRARY_ZIP"
+          echo ""
+          
+          # Get list of all modules in the zip
+          ALL_MODULES=$(zipinfo -1 "$LIBRARY_ZIP" | grep "\.pyc$" | sed 's/\.pyc$//' | sort | uniq)
+          
+          echo "=== Azure Dependencies Check ==="
+          MISSING_DEPS=()
+          FOUND_DEPS=()
+          
+          for dep in "${EXPECTED_MODULES[@]}"; do
+            # Convert dot notation to path notation for searching
+            DEP_PATH=$(echo "$dep" | tr '.' '/')
+            
+            if echo "$ALL_MODULES" | grep -q "^$DEP_PATH" || echo "$ALL_MODULES" | grep -q "/$DEP_PATH"; then
+              echo "✓ $dep - Found"
+              FOUND_DEPS+=("$dep")
+            else
+              echo "❌ $dep - Missing"
+              MISSING_DEPS+=("$dep")
+            fi
+          done
+          
+          echo ""
+          echo "=== Summary ==="
+          echo "Found dependencies: ${#FOUND_DEPS[@]}"
+          echo "Missing dependencies: ${#MISSING_DEPS[@]}"
+          
+          if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
+            echo ""
+            echo "❌ Missing critical dependencies:"
+            for dep in "${MISSING_DEPS[@]}"; do
+              echo "  - $dep"
+            done
+            
+            echo ""
+            echo "=== Detailed Module Search ==="
+            echo "Searching for Azure-related modules in the bundle:"
+            echo "$ALL_MODULES" | grep -i azure | head -20 || echo "No azure modules found"
+            echo ""
+            echo "Searching for MSAL-related modules:"
+            echo "$ALL_MODULES" | grep -i msal | head -10 || echo "No msal modules found"
+            echo ""
+            echo "Total modules in bundle: $(echo "$ALL_MODULES" | wc -l)"
+            
+            exit 1
+          else
+            echo "✅ All critical Azure/Broker dependencies are bundled!"
+          fi
+          
+          echo ""
+          echo "=== Dependency Coverage Analysis ==="
+          echo "Azure modules found:"
+          echo "$ALL_MODULES" | grep -E "(azure|Azure)" | head -10
+          echo ""
+          echo "MSAL modules found:"
+          echo "$ALL_MODULES" | grep -E "(msal|Msal|MSAL)" | head -10
+          echo ""
+          echo "Crypto modules found:"
+          echo "$ALL_MODULES" | grep -E "(crypt|Crypt)" | head -5
+          echo ""
+          echo "Total bundled Python modules: $(echo "$ALL_MODULES" | wc -l)"
+
       - name: Inspect PyInstaller contents  
         run: |
           echo "=== PyInstaller warnings ==="
@@ -92,8 +202,22 @@ jobs:
           if [ -d dist/mycli ]; then
             echo "Found dist/mycli directory (COLLECT build)"
             ls -la dist/mycli/
-            if [ -f dist/mycli/base_library.zip ]; then
-              echo "Checking base_library.zip for all Azure/MSAL modules:"
+            
+            # Check for base_library.zip in the newer location (_internal)
+            if [ -f dist/mycli/_internal/base_library.zip ]; then
+              echo "Checking _internal/base_library.zip for all Azure/MSAL modules:"
+              echo "--- Azure modules ---"
+              zipinfo dist/mycli/_internal/base_library.zip | grep -i azure | head -15 || echo "No azure entries found"
+              echo "--- MSAL modules ---" 
+              zipinfo dist/mycli/_internal/base_library.zip | grep -i msal | head -10 || echo "No msal entries found"
+              echo "--- PyMSALRuntime modules ---"
+              zipinfo dist/mycli/_internal/base_library.zip | grep -i pymsalruntime || echo "No pymsalruntime entries found"
+              echo "--- Cryptography modules ---"
+              zipinfo dist/mycli/_internal/base_library.zip | grep -i cryptography | head -5 || echo "No cryptography entries found"
+              echo "--- Total module count ---"
+              zipinfo dist/mycli/_internal/base_library.zip | grep "\.pyc$" | wc -l
+            elif [ -f dist/mycli/base_library.zip ]; then
+              echo "Checking base_library.zip for all Azure/MSAL modules (legacy location):"
               echo "--- Azure modules ---"
               zipinfo dist/mycli/base_library.zip | grep -i azure | head -15 || echo "No azure entries found"
               echo "--- MSAL modules ---" 
@@ -105,8 +229,21 @@ jobs:
               echo "--- Total module count ---"
               zipinfo dist/mycli/base_library.zip | grep "\.pyc$" | wc -l
             else
-              echo "base_library.zip not found in dist/mycli/"
+              echo "base_library.zip not found in expected locations"
+              echo "Contents of _internal directory:"
+              ls -la dist/mycli/_internal/ || echo "_internal directory not found"
             fi
+            
+            # Show _internal directory contents for debugging
+            echo ""
+            echo "=== _internal directory analysis ==="
+            if [ -d dist/mycli/_internal ]; then
+              echo "Contents of _internal:"
+              ls -la dist/mycli/_internal/
+              echo "Python library files:"
+              ls -la dist/mycli/_internal/ | grep -E "\.(so|dylib|pyd)$" || echo "No shared library files found"
+            fi
+            
           elif [ -f dist/mycli ]; then
             echo "Found dist/mycli file (onefile build)"
             echo "File size: $(ls -lh dist/mycli | awk '{print $5}')"
