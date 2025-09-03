@@ -412,13 +412,24 @@ jobs:
             echo "✓ SHA256 checksum file found"
             echo "SHA256: $(cat "$FIRST_SHA")"
             
-            # Verify checksum
-            if shasum -a 256 -c "$FIRST_SHA"; then
+            # Verify checksum - need to be in the right directory
+            TARBALL_NAME=$(basename "$FIRST_TARBALL")
+            SHA_NAME=$(basename "$FIRST_SHA")
+            
+            echo "Verifying checksum for: $TARBALL_NAME"
+            cd upload
+            if shasum -a 256 -c "$SHA_NAME"; then
               echo "✓ SHA256 checksum verified"
             else
               echo "❌ SHA256 checksum verification failed"
+              echo "Available files in upload/:"
+              ls -la
+              echo "Contents of $SHA_NAME:"
+              cat "$SHA_NAME"
+              cd ..
               exit 1
             fi
+            cd ..
           else
             echo "❌ SHA256 file missing"
             exit 1
