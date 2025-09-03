@@ -55,12 +55,11 @@ jobs:
         run: |
           echo "🧹 Cleaning up any previous installations..."
           brew uninstall mycli 2>/dev/null || echo "No previous installation found"
-          brew untap naga-nandyala/mycli-app 2>/dev/null || echo "Tap not previously added"
       
       - name: Test Homebrew formula installation
         run: |
           echo "🍺 Installing mycli via Homebrew..."
-          brew install naga-nandyala/mycli-app/mycli
+          brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli.rb
       
       - name: Verify installation
         run: |
@@ -123,7 +122,7 @@ jobs:
       - name: Test formula info
         run: |
           echo "📊 Formula information:"
-          brew info naga-nandyala/mycli-app/mycli
+          brew info mycli
           
           echo "📁 Installation files:"
           brew list mycli
@@ -133,7 +132,6 @@ jobs:
         run: |
           echo "🧹 Final cleanup..."
           brew uninstall mycli 2>/dev/null || echo "Nothing to uninstall"
-          brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No tap to remove"
       
       - name: Report results
         if: always()
