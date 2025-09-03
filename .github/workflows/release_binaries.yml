@@ -116,6 +116,56 @@ jobs:
             ls -la dist/ || echo "dist/ directory not found"
           fi
 
+      - name: Test binary functionality
+        run: |
+          echo "=== Testing Built Binary ==="
+          # Find the binary location
+          if [ -f dist/mycli ]; then
+            BINARY_PATH="dist/mycli"
+            echo "Found onefile binary: $BINARY_PATH"
+          elif [ -f dist/mycli/mycli ]; then
+            BINARY_PATH="dist/mycli/mycli"
+            echo "Found COLLECT binary: $BINARY_PATH"
+          else
+            echo "❌ Could not locate built binary" >&2
+            ls -la dist/ || echo "dist/ directory not found"
+            exit 1
+          fi
+          
+          # Make sure binary is executable
+          chmod +x "$BINARY_PATH"
+          
+          # Get binary info
+          echo "=== Binary Information ==="
+          ls -lh "$BINARY_PATH"
+          file "$BINARY_PATH" || echo "file command not available"
+          
+          # Test basic functionality
+          echo "=== Basic Functionality Tests ==="
+          echo "Testing --version:"
+          "$BINARY_PATH" --version || { echo "❌ Version command failed"; exit 1; }
+          
+          echo "Testing --help:"
+          "$BINARY_PATH" --help || { echo "❌ Help command failed"; exit 1; }
+          
+          echo "Testing status command:"
+          "$BINARY_PATH" status || { echo "❌ Status command failed"; exit 1; }
+          
+          # Test Azure functionality if enabled
+          if [ "${{ env.MYCLI_WITH_AZURE }}" = "1" ]; then
+            echo "=== Azure Functionality Tests ==="
+            echo "Testing broker command:"
+            "$BINARY_PATH" broker || { echo "❌ Broker command failed"; exit 1; }
+            
+            echo "Testing account command:"
+            "$BINARY_PATH" account --help || { echo "❌ Account command failed"; exit 1; }
+            
+            echo "Testing login command:"
+            "$BINARY_PATH" login --help || { echo "❌ Login command failed"; exit 1; }
+          fi
+          
+          echo "✅ All binary tests passed!"
+
       - name: Package
         run: |
           INPUT_VERSION='${{ github.event.inputs.version }}'
@@ -142,6 +192,32 @@ jobs:
           shasum -a 256 "$TAR_NAME" > "$TAR_NAME.sha256"
           echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Test packaged binary
+        run: |
+          echo "=== Testing Packaged Binary ==="
+          TAR_NAME="${{ env.TAR_NAME }}"
+          
+          # Extract and test the packaged binary
+          echo "Extracting $TAR_NAME..."
+          tar -xzf "$TAR_NAME"
+          
+          echo "Testing extracted binary..."
+          chmod +x mycli
+          
+          echo "=== Final Package Tests ==="
+          echo "Version:"
+          ./mycli --version
+          
+          echo "Status:"
+          ./mycli status
+          
+          if [ "${{ env.MYCLI_WITH_AZURE }}" = "1" ]; then
+            echo "Broker info:"
+            ./mycli broker
+          fi
+          
+          echo "✅ Packaged binary test successful!"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -176,6 +252,45 @@ jobs:
           mkdir upload
           find artifacts -name '*.tar.gz' -exec cp {} upload/ \;
           find artifacts -name '*.sha256' -exec cp {} upload/ \;
+
+      - name: Final validation test
+        run: |
+          echo "=== Final Release Validation ==="
+          # Test one of the built binaries before release
+          FIRST_TARBALL=$(find upload -name 'mycli-*.tar.gz' | head -1)
+          if [ -z "$FIRST_TARBALL" ]; then
+            echo "❌ No tarball found for validation"
+            exit 1
+          fi
+          
+          echo "Testing: $FIRST_TARBALL"
+          
+          # Extract and test
+          tar -xzf "$FIRST_TARBALL"
+          chmod +x mycli
+          
+          echo "=== Release Validation Tests ==="
+          echo "Binary info:"
+          ls -lh mycli
+          
+          echo "Version check:"
+          ./mycli --version
+          
+          echo "Basic functionality:"
+          ./mycli --help > /dev/null && echo "✓ Help command works"
+          ./mycli status > /dev/null && echo "✓ Status command works"
+          
+          # Check if binary includes Azure functionality
+          if ./mycli broker > /dev/null 2>&1; then
+            echo "✓ Azure/broker functionality available"
+          else
+            echo "⚠️  Azure/broker functionality not available"
+          fi
+          
+          echo "✅ Release validation passed!"
+          
+          # Clean up test files
+          rm -f mycli
 
       - name: Create Release
         if: ${{ github.event.inputs.create_release == 'true' }}
