@@ -51,19 +51,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller build
-          # Install project (uses pyproject.toml for dependencies). Set MYCLI_EXTRAS (e.g. azure,broker) to include extras.
-          if [ "${MYCLI_EXTRAS:-}" != "" ]; then
-            pip install ".[${MYCLI_EXTRAS}]"
-          else
-            pip install .
-          fi
-
-      - name: Verify installed packages
-        run: |
-          echo "=== Installed packages ==="
-          pip list | grep -E "(azure|msal|click|colorama)" || echo "No matching packages found"
-          echo "=== Package check ==="
-          pip check
 
       - name: Build binary (spec file)
         run: |
@@ -84,9 +71,17 @@ jobs:
             echo "Found dist/mycli directory (COLLECT build)"
             ls -la dist/mycli/
             if [ -f dist/mycli/base_library.zip ]; then
-              echo "Checking base_library.zip for Azure/MSAL modules:"
-              zipinfo dist/mycli/base_library.zip | grep -i azure | head -10 || echo "No azure entries found"
-              zipinfo dist/mycli/base_library.zip | grep -i msal | head -5 || echo "No msal entries found"
+              echo "Checking base_library.zip for all Azure/MSAL modules:"
+              echo "--- Azure modules ---"
+              zipinfo dist/mycli/base_library.zip | grep -i azure | head -15 || echo "No azure entries found"
+              echo "--- MSAL modules ---" 
+              zipinfo dist/mycli/base_library.zip | grep -i msal | head -10 || echo "No msal entries found"
+              echo "--- PyMSALRuntime modules ---"
+              zipinfo dist/mycli/base_library.zip | grep -i pymsalruntime || echo "No pymsalruntime entries found"
+              echo "--- Cryptography modules ---"
+              zipinfo dist/mycli/base_library.zip | grep -i cryptography | head -5 || echo "No cryptography entries found"
+              echo "--- Total module count ---"
+              zipinfo dist/mycli/base_library.zip | grep "\.pyc$" | wc -l
             else
               echo "base_library.zip not found in dist/mycli/"
             fi

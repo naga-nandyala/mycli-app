@@ -11,14 +11,45 @@ INCLUDE_AZURE = True if os.environ.get("MYCLI_WITH_AZURE", "0") == "1" else Fals
 
 hiddenimports = []
 if INCLUDE_AZURE:
+    # Explicitly list all packages from pyproject.toml azure + broker extras
     azure_pkgs = [
         "azure.identity",
-        "azure.core",
+        "azure.core", 
         "azure.mgmt.core",
         "msal",
+        # Additional packages that might be pulled in by msal[broker]
+        "pymsalruntime",
+        "cryptography",
+        "requests",
+        "requests_oauthlib",
     ]
+    
+    print(f"Including Azure packages: {azure_pkgs}")
+    
     for pkg in azure_pkgs:
-        hiddenimports.extend(collect_submodules(pkg))
+        try:
+            submodules = collect_submodules(pkg)
+            hiddenimports.extend(submodules)
+            print(f"Added {len(submodules)} submodules for {pkg}")
+        except Exception as e:
+            print(f"Warning: Could not collect submodules for {pkg}: {e}")
+    
+    # Add specific modules that might be missed by auto-detection
+    additional_imports = [
+        "msal.application",
+        "msal.oauth2cli", 
+        "msal.token_cache",
+        "azure.identity._credentials",
+        "azure.identity._internal", 
+        "azure.core.credentials",
+        "azure.core.pipeline",
+        "pymsalruntime.broker",
+        "pymsalruntime.msalruntime",
+    ]
+    
+    hiddenimports.extend(additional_imports)
+    print(f"Added {len(additional_imports)} additional specific imports")
+    print(f"Total hiddenimports: {len(hiddenimports)}")
 
 block_cipher = None
 
