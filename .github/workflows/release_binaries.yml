@@ -57,12 +57,33 @@ jobs:
             pip install .
           fi
 
+      - name: Verify installed packages
+        run: |
+          echo "=== Installed packages ==="
+          pip list | grep -E "(azure|msal|click|colorama)" || echo "No matching packages found"
+          echo "=== Package check ==="
+          pip check
+
       - name: Build binary (spec file)
         run: |
           # Set MYCLI_WITH_AZURE=1 in job/env or before this line to include optional azure packages.
           pyinstaller macos_homebrew/pyinstaller/mycli.spec --clean
           echo "PyInstaller build finished. Contents of dist/:"
           ls -R dist
+
+      - name: Inspect PyInstaller contents  
+        run: |
+          echo "=== PyInstaller warnings ==="
+          if ls warn-*.txt 2>/dev/null; then cat warn-*.txt; else echo "No warning files found"; fi
+          echo ""
+          echo "=== Binary contents check ==="
+          if [ -f dist/mycli/base_library.zip ]; then
+            echo "Found base_library.zip"
+            zipinfo dist/mycli/base_library.zip | grep -i azure | head -10 || echo "No azure entries found"
+            zipinfo dist/mycli/base_library.zip | grep -i msal | head -5 || echo "No msal entries found"
+          else
+            echo "base_library.zip not found - might be onefile build"
+          fi
 
       - name: Package
         run: |
