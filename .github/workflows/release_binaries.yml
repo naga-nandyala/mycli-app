@@ -37,6 +37,7 @@ jobs:
             runner: macos-13
     env:
       PYTHON_VERSION: '3.12'
+      MYCLI_EXTRAS: 'azure,broker'
     steps:
       - uses: actions/checkout@v4
 
