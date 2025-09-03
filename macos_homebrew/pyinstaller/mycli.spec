@@ -22,10 +22,20 @@ if INCLUDE_AZURE:
 
 block_cipher = None
 
-# Entry script (build absolute path so running spec outside repo root works)
-SPEC_DIR = os.path.dirname(__file__)
-PROJECT_ROOT = os.path.abspath(os.path.join(SPEC_DIR, '..', '..'))
+"""Spec adjustments:
+We cannot rely on __file__ (not injected by PyInstaller exec). Use current working
+directory (expected repo root in CI). Fallback: ascend two levels if entry script
+not found initially (covers invocation from spec directory).
+"""
+PROJECT_ROOT = os.getcwd()
 entry_script = os.path.join(PROJECT_ROOT, 'src', 'mycli_app', 'cli.py')
+if not os.path.exists(entry_script):
+    # Try going two levels up (running from spec dir scenario)
+    alt_root = os.path.abspath(os.path.join(PROJECT_ROOT, '..', '..'))
+    candidate = os.path.join(alt_root, 'src', 'mycli_app', 'cli.py')
+    if os.path.exists(candidate):
+        PROJECT_ROOT = alt_root
+        entry_script = candidate
 
 pathex = [PROJECT_ROOT]
 
