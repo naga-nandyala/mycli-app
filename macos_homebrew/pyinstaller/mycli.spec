@@ -61,12 +61,6 @@ print(f"Hidden imports included ({len(hiddenimports)}): {hiddenimports}")
 # ---------------------------
 # Include any non-Python files your CLI needs
 datas = collect_data_files("mycli_app")  # collects all package data files
-# Add custom files if needed
-custom_datas = [
-    ("src/mycli_app/config.yaml", "."),
-    ("src/mycli_app/templates/*", "templates"),
-]
-datas.extend(custom_datas)
 
 # ---------------------------
 # Binaries
