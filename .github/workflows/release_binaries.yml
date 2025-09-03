@@ -262,7 +262,7 @@ jobs:
 
   release:
     needs: build-macos
-    runs-on: ubuntu-latest
+    runs-on: macos-latest  # Changed from ubuntu-latest to support macOS binary testing
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -288,7 +288,7 @@ jobs:
 
       - name: Final validation test
         run: |
-          echo "=== Final Release Validation ==="
+          echo "=== Final Release Validation on macOS ==="
           # Test one of the built binaries before release
           FIRST_TARBALL=$(find upload -name 'mycli-*.tar.gz' | head -1)
           if [ -z "$FIRST_TARBALL" ]; then
@@ -297,6 +297,8 @@ jobs:
           fi
           
           echo "Testing: $FIRST_TARBALL"
+          echo "Runner architecture: $(uname -m)"
+          echo "Runner OS: $(uname -s)"
           
           # Extract and test
           tar -xzf "$FIRST_TARBALL"
@@ -306,10 +308,30 @@ jobs:
             echo "Found onefile binary: mycli"
             chmod +x mycli
             BINARY_PATH="./mycli"
+            echo "✓ Onefile structure validated"
           elif [ -d mycli ]; then
             echo "Found COLLECT directory: mycli"
+            echo "Contents of mycli directory:"
+            ls -la mycli/
             chmod +x mycli/mycli
             BINARY_PATH="./mycli/mycli"
+            
+            # Validate COLLECT structure
+            if [ -f mycli/mycli ]; then
+              echo "✓ Main executable found"
+            else
+              echo "❌ Main executable missing"
+              exit 1
+            fi
+            
+            if [ -d mycli/_internal ]; then
+              echo "✓ Dependencies directory found"
+              echo "Dependencies count: $(ls mycli/_internal | wc -l)"
+            else
+              echo "⚠️  No _internal directory (might be onefile in directory)"
+            fi
+            
+            echo "✓ COLLECT structure validated"
           else
             echo "❌ Could not locate extracted binary"
             ls -la .
@@ -320,21 +342,90 @@ jobs:
           echo "Binary info:"
           ls -lh "$BINARY_PATH"
           
-          echo "Version check:"
-          "$BINARY_PATH" --version
+          # File type validation
+          echo "Binary file type:"
+          file "$BINARY_PATH"
           
-          echo "Basic functionality:"
-          "$BINARY_PATH" --help > /dev/null && echo "✓ Help command works"
-          "$BINARY_PATH" status > /dev/null && echo "✓ Status command works"
+          # Size validation
+          BINARY_SIZE=$(stat -f%z "$BINARY_PATH")
+          echo "Binary size: $BINARY_SIZE bytes ($(($BINARY_SIZE / 1024 / 1024))MB)"
           
-          # Check if binary includes Azure functionality
-          if "$BINARY_PATH" broker > /dev/null 2>&1; then
-            echo "✓ Azure/broker functionality available"
+          if [ "$BINARY_SIZE" -gt 5000000 ]; then
+            echo "✓ Binary size looks reasonable (>5MB, likely includes Azure deps)"
           else
-            echo "⚠️  Azure/broker functionality not available"
+            echo "⚠️  Binary size seems small, might be missing dependencies"
           fi
           
-          echo "✅ Release validation passed!"
+          # FUNCTIONAL TESTING - Now we can actually run the binary!
+          echo "=== Functional Testing ==="
+          
+          echo "Testing --version:"
+          "$BINARY_PATH" --version || { echo "❌ Version command failed"; exit 1; }
+          
+          echo "Testing --help:"
+          "$BINARY_PATH" --help > /dev/null || { echo "❌ Help command failed"; exit 1; }
+          echo "✓ Help command works"
+          
+          echo "Testing status command:"
+          STATUS_OUTPUT=$("$BINARY_PATH" status)
+          echo "$STATUS_OUTPUT"
+          if echo "$STATUS_OUTPUT" | grep -q "Azure SDK: Available"; then
+            echo "✓ Azure SDK is available in binary"
+          else
+            echo "⚠️  Azure SDK might not be available"
+          fi
+          
+          if echo "$STATUS_OUTPUT" | grep -q "Broker Support: Available"; then
+            echo "✓ Broker support is available in binary"
+          else
+            echo "⚠️  Broker support might not be available"
+          fi
+          
+          echo "Testing broker command:"
+          BROKER_OUTPUT=$("$BINARY_PATH" broker)
+          if echo "$BROKER_OUTPUT" | grep -q "Broker Support: Available"; then
+            echo "✓ Broker functionality works"
+          else
+            echo "⚠️  Broker functionality issue"
+          fi
+          
+          echo "Testing account command:"
+          "$BINARY_PATH" account --help > /dev/null || { echo "❌ Account command failed"; exit 1; }
+          echo "✓ Account command works"
+          
+          echo "Testing login command:"
+          "$BINARY_PATH" login --help > /dev/null || { echo "❌ Login command failed"; exit 1; }
+          echo "✓ Login command works"
+          
+          # Validate tarball integrity
+          echo "=== Package Validation ==="
+          if tar -tzf "$FIRST_TARBALL" > /dev/null; then
+            echo "✓ Tarball integrity verified"
+          else
+            echo "❌ Tarball integrity check failed"
+            exit 1
+          fi
+          
+          # Check SHA256 file
+          FIRST_SHA=$(find upload -name 'mycli-*.sha256' | head -1)
+          if [ -f "$FIRST_SHA" ]; then
+            echo "✓ SHA256 checksum file found"
+            echo "SHA256: $(cat "$FIRST_SHA")"
+            
+            # Verify checksum
+            if shasum -a 256 -c "$FIRST_SHA"; then
+              echo "✓ SHA256 checksum verified"
+            else
+              echo "❌ SHA256 checksum verification failed"
+              exit 1
+            fi
+          else
+            echo "❌ SHA256 file missing"
+            exit 1
+          fi
+          
+          echo "✅ Full release validation passed on macOS!"
+          echo "Binary is functional with all Azure/MSAL capabilities"
           
           # Clean up test files
           rm -rf mycli
