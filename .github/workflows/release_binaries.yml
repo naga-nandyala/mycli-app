@@ -38,6 +38,7 @@ jobs:
     env:
       PYTHON_VERSION: '3.12'
       MYCLI_EXTRAS: 'azure,broker'
+      MYCLI_WITH_AZURE: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -77,12 +78,25 @@ jobs:
           if ls warn-*.txt 2>/dev/null; then cat warn-*.txt; else echo "No warning files found"; fi
           echo ""
           echo "=== Binary contents check ==="
-          if [ -f dist/mycli/base_library.zip ]; then
-            echo "Found base_library.zip"
-            zipinfo dist/mycli/base_library.zip | grep -i azure | head -10 || echo "No azure entries found"
-            zipinfo dist/mycli/base_library.zip | grep -i msal | head -5 || echo "No msal entries found"
+          echo "Checking dist directory structure:"
+          ls -la dist/
+          if [ -d dist/mycli ]; then
+            echo "Found dist/mycli directory (COLLECT build)"
+            ls -la dist/mycli/
+            if [ -f dist/mycli/base_library.zip ]; then
+              echo "Checking base_library.zip for Azure/MSAL modules:"
+              zipinfo dist/mycli/base_library.zip | grep -i azure | head -10 || echo "No azure entries found"
+              zipinfo dist/mycli/base_library.zip | grep -i msal | head -5 || echo "No msal entries found"
+            else
+              echo "base_library.zip not found in dist/mycli/"
+            fi
+          elif [ -f dist/mycli ]; then
+            echo "Found dist/mycli file (onefile build)"
+            echo "File size: $(ls -lh dist/mycli | awk '{print $5}')"
           else
-            echo "base_library.zip not found - might be onefile build"
+            echo "Neither dist/mycli directory nor file found"
+            echo "Available files in dist/:"
+            ls -la dist/ || echo "dist/ directory not found"
           fi
 
       - name: Package
