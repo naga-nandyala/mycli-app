@@ -22,12 +22,16 @@ if INCLUDE_AZURE:
 
 block_cipher = None
 
-# Entry script
-entry_script = 'src/mycli_app/cli.py'
+# Entry script (build absolute path so running spec outside repo root works)
+SPEC_DIR = os.path.dirname(__file__)
+PROJECT_ROOT = os.path.abspath(os.path.join(SPEC_DIR, '..', '..'))
+entry_script = os.path.join(PROJECT_ROOT, 'src', 'mycli_app', 'cli.py')
+
+pathex = [PROJECT_ROOT]
 
 a = Analysis(
     [entry_script],
-    pathex=[],
+    pathex=pathex,
     binaries=[],
     datas=[],
     hiddenimports=hiddenimports,
