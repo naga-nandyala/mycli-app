@@ -2,15 +2,17 @@
 class Mycli < Formula
   desc "Simple Azure-like CLI tool"
   homepage "https://github.com/naga-nandyala/mycli-app"
-  version "1.0.0" # update on release
+  version "0.1.0" # TODO: Update this version and SHA256s for each release
   license "MIT"
 
+  base_url = "https://github.com/naga-nandyala/mycli-app/releases/download/v#{version}"
+  
   if Hardware::CPU.arm?
-    url "https://github.com/naga-nandyala/mycli-app/releases/download/v1.0.0/mycli-1.0.0-macos-arm64.tar.gz"
-    sha256 "REPLACE_ARM64_SHA256"
+    url "#{base_url}/mycli-#{version}-macos-arm64.tar.gz"
+    sha256 "e283f201e6f05659369434376973a76891d542da356a9b191d1b786b3188eae3" # Update for each release
   else
-    url "https://github.com/naga-nandyala/mycli-app/releases/download/v1.0.0/mycli-1.0.0-macos-x86_64.tar.gz"
-    sha256 "REPLACE_X86_64_SHA256"
+    url "#{base_url}/mycli-#{version}-macos-x86_64.tar.gz"
+    sha256 "0f640378bc95e3cf6cc0eb848ac5220f40c66dd71a0db58549116dc267f94f1c" # Update for each release
   end
 
   def install
