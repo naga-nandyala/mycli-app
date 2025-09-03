@@ -3,6 +3,10 @@
 
 name: build-release-binaries
 
+# Ensure GITHUB_TOKEN can create releases
+permissions:
+  contents: write
+
 on:
   push:
     tags:
@@ -97,5 +101,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: upload/*
+          token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
