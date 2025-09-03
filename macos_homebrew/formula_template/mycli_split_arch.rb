@@ -12,7 +12,7 @@ class Mycli < Formula
     sha256 "e283f201e6f05659369434376973a76891d542da356a9b191d1b786b3188eae3" # Update for each release
   else
     url "#{base_url}/mycli-#{version}-macos-x86_64.tar.gz"
-    sha256 "0f640378bc95e3cf6cc0eb848ac5220f40c66dd71a0db58549116dc267f94f1c" # Update for each release
+    sha256 "8d74eec878a5f241d7f1f3f6585c68d25ddda784ebe19a97b9607c2ab6d0b64c" # Update for each release
   end
 
   def install
