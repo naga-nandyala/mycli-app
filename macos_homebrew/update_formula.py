@@ -81,7 +81,7 @@ def update_formula_template(template_path, release_info):
 
         # Update ARM64 SHA256
         content = re.sub(
-            r'(if Hardware::CPU\.arm\?\s*\n\s*url.*\n\s*sha256\s+")[^"]*(")',
+            r'(if Hardware::CPU\.arm\?\s*\n\s*url[^\n]*\n\s*sha256\s+")[^"]*(")',
             rf"\g<1>{arm64_sha256}\g<2>",
             content,
             flags=re.MULTILINE | re.DOTALL,
@@ -89,7 +89,7 @@ def update_formula_template(template_path, release_info):
 
         # Update x86_64 SHA256
         content = re.sub(
-            r'(else\s*\n\s*url.*\n\s*sha256\s+")[^"]*(")',
+            r'(else\s*\n\s*url[^\n]*\n\s*sha256\s+")[^"]*(")',
             rf"\g<1>{x86_64_sha256}\g<2>",
             content,
             flags=re.MULTILINE | re.DOTALL,
