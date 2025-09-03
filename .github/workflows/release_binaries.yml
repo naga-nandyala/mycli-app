@@ -177,21 +177,36 @@ jobs:
             VERSION="$CODE_VERSION"
           fi
           ARCH=${{ matrix.arch }}
-          # Binary path differs when using spec (folder build). Adjust if needed.
+          
+          echo "=== Packaging Binary ==="
+          TAR_NAME="mycli-${VERSION}-macos-${ARCH}.tar.gz"
+          
+          # Handle both onefile and onedir (COLLECT) builds
           if [ -f dist/mycli ]; then
+            echo "Found onefile binary: dist/mycli"
             cp dist/mycli mycli
-          elif [ -f dist/mycli/mycli ]; then
-            cp dist/mycli/mycli mycli
+            chmod +x mycli
+            tar -czf "$TAR_NAME" mycli
+          elif [ -d dist/mycli ]; then
+            echo "Found COLLECT directory: dist/mycli"
+            echo "Contents of dist/mycli:"
+            ls -la dist/mycli/
+            # For COLLECT builds, package the entire directory but rename the top level
+            cd dist
+            tar -czf "../$TAR_NAME" mycli/
+            cd ..
           else
             echo "Could not locate built binary" >&2
+            ls -la dist/ || echo "dist/ directory not found"
             exit 1
           fi
-          chmod +x mycli
-          TAR_NAME="mycli-${VERSION}-macos-${ARCH}.tar.gz"
-          tar -czf "$TAR_NAME" mycli
+          
           shasum -a 256 "$TAR_NAME" > "$TAR_NAME.sha256"
           echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          
+          echo "Created package: $TAR_NAME"
+          echo "Package size: $(ls -lh $TAR_NAME | awk '{print $5}')"
 
       - name: Test packaged binary
         run: |
@@ -203,18 +218,36 @@ jobs:
           tar -xzf "$TAR_NAME"
           
           echo "Testing extracted binary..."
-          chmod +x mycli
+          
+          # Handle both onefile and COLLECT directory structures
+          if [ -f mycli ]; then
+            echo "Found onefile binary: mycli"
+            chmod +x mycli
+            BINARY_PATH="./mycli"
+          elif [ -d mycli ]; then
+            echo "Found COLLECT directory: mycli"
+            echo "Contents of mycli directory:"
+            ls -la mycli/
+            chmod +x mycli/mycli
+            BINARY_PATH="./mycli/mycli"
+          else
+            echo "❌ Could not locate extracted binary"
+            ls -la .
+            exit 1
+          fi
           
           echo "=== Final Package Tests ==="
+          echo "Using binary: $BINARY_PATH"
+          
           echo "Version:"
-          ./mycli --version
+          "$BINARY_PATH" --version
           
           echo "Status:"
-          ./mycli status
+          "$BINARY_PATH" status
           
           if [ "${{ env.MYCLI_WITH_AZURE }}" = "1" ]; then
             echo "Broker info:"
-            ./mycli broker
+            "$BINARY_PATH" broker
           fi
           
           echo "✅ Packaged binary test successful!"
@@ -267,21 +300,35 @@ jobs:
           
           # Extract and test
           tar -xzf "$FIRST_TARBALL"
-          chmod +x mycli
+          
+          # Handle both onefile and COLLECT directory structures
+          if [ -f mycli ]; then
+            echo "Found onefile binary: mycli"
+            chmod +x mycli
+            BINARY_PATH="./mycli"
+          elif [ -d mycli ]; then
+            echo "Found COLLECT directory: mycli"
+            chmod +x mycli/mycli
+            BINARY_PATH="./mycli/mycli"
+          else
+            echo "❌ Could not locate extracted binary"
+            ls -la .
+            exit 1
+          fi
           
           echo "=== Release Validation Tests ==="
           echo "Binary info:"
-          ls -lh mycli
+          ls -lh "$BINARY_PATH"
           
           echo "Version check:"
-          ./mycli --version
+          "$BINARY_PATH" --version
           
           echo "Basic functionality:"
-          ./mycli --help > /dev/null && echo "✓ Help command works"
-          ./mycli status > /dev/null && echo "✓ Status command works"
+          "$BINARY_PATH" --help > /dev/null && echo "✓ Help command works"
+          "$BINARY_PATH" status > /dev/null && echo "✓ Status command works"
           
           # Check if binary includes Azure functionality
-          if ./mycli broker > /dev/null 2>&1; then
+          if "$BINARY_PATH" broker > /dev/null 2>&1; then
             echo "✓ Azure/broker functionality available"
           else
             echo "⚠️  Azure/broker functionality not available"
@@ -290,7 +337,7 @@ jobs:
           echo "✅ Release validation passed!"
           
           # Clean up test files
-          rm -f mycli
+          rm -rf mycli
 
       - name: Create Release
         if: ${{ github.event.inputs.create_release == 'true' }}
