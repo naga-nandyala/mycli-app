@@ -115,7 +115,7 @@ def main():
 
     # Get the formula path (now in the main repo)
     script_dir = Path(__file__).parent.parent  # Go up to main repo root
-    template_path = script_dir / "Formula" / "mycli.rb"
+    template_path = script_dir / "Formula" / "mycli-app.rb"
 
     if not template_path.exists():
         print(f"Error: Formula not found at {template_path}")

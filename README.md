@@ -19,7 +19,7 @@ A simple CLI application similar to Azure CLI with Azure authentication capabili
 
 ```bash
 # Install directly from this repository
-brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli.rb
+brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb
 
 # Verify installation
 mycli --version

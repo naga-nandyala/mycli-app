@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-* Formula location: `Formula/mycli.rb` in this repository
+* Formula location: `Formula/mycli-app.rb` in this repository
 * This repository contains automated workflows for building and formula updates
 * Version updated in `src/mycli_app/__init__.py`
 * Git tag follows `vX.Y.Z` format
@@ -28,7 +28,7 @@ gh release create vX.Y.Z --title "Release vX.Y.Z" --notes "Release notes here"
 
 ### 3. Automation Handles
 - ✅ **Binary Building**: GitHub Actions builds macOS binaries (ARM64 + x86_64)
-- ✅ **Formula Update**: Automatically updates `Formula/mycli.rb` with new SHA256 hashes
+- ✅ **Formula Update**: Automatically updates `Formula/mycli-app.rb` with new SHA256 hashes
 - ✅ **Release Upload**: Binaries and SHA256 files uploaded to GitHub release
 
 ## Manual Formula Update (if needed)
@@ -50,7 +50,7 @@ Test the updated formula:
 brew uninstall mycli 2>/dev/null || true
 
 # Install from your repository
-brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli.rb
+brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb
 
 # Verify installation
 mycli --version
@@ -66,7 +66,7 @@ If automation completely fails:
    shasum -a 256 mycli-X.Y.Z-macos-arm64.tar.gz
    shasum -a 256 mycli-X.Y.Z-macos-x86_64.tar.gz
    ```
-3. **Update `Formula/mycli.rb`** with new version and SHA256 values
+3. **Update `Formula/mycli-app.rb`** with new version and SHA256 values
 4. **Commit and push**
 
 ## Troubleshooting
@@ -83,7 +83,7 @@ If automation completely fails:
 ```text
 mycli-app/
 ├── Formula/
-│   └── mycli.rb              # 🍺 Homebrew formula (auto-updated)
+│   └── mycli-app.rb          # 🍺 Homebrew formula (auto-updated)
 ├── .github/workflows/
 │   ├── release_binaries.yml  # Builds macOS binaries
 │   └── update-homebrew-formula.yml  # Updates formula

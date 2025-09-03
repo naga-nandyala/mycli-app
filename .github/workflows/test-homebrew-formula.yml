@@ -4,7 +4,7 @@ on:
   # Test after formula updates
   push:
     paths:
-      - 'Formula/mycli.rb'
+      - 'Formula/mycli-app.rb'
   
   # Test after releases (when binaries are updated)
   release:
@@ -54,12 +54,12 @@ jobs:
       - name: Clean previous installations
         run: |
           echo "🧹 Cleaning up any previous installations..."
-          brew uninstall mycli 2>/dev/null || echo "No previous installation found"
+          brew uninstall mycli-app 2>/dev/null || echo "No previous installation found"
       
       - name: Test Homebrew formula installation
         run: |
-          echo "🍺 Installing mycli via Homebrew..."
-          brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli.rb
+          echo "🍺 Installing mycli-app via Homebrew..."
+          brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb
       
       - name: Verify installation
         run: |
@@ -122,16 +122,16 @@ jobs:
       - name: Test formula info
         run: |
           echo "📊 Formula information:"
-          brew info mycli
+          brew info mycli-app
           
           echo "📁 Installation files:"
-          brew list mycli
+          brew list mycli-app
       
       - name: Cleanup
         if: always()
         run: |
           echo "🧹 Final cleanup..."
-          brew uninstall mycli 2>/dev/null || echo "Nothing to uninstall"
+          brew uninstall mycli-app 2>/dev/null || echo "Nothing to uninstall"
       
       - name: Report results
         if: always()
