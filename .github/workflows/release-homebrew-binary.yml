@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to build (e.g. v1.0.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write   # for creating/updating releases
@@ -29,17 +35,29 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
             python-version: '3.12'
 
-      - name: Derive version from tag
+      - name: Derive version from tag (or input)
         id: vars
         run: |
-          TAG=${GITHUB_REF_NAME}
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "No tag provided or detected. Failing." >&2
+            exit 1
+          fi
+            
           VERSION=${TAG#v}
+          echo "Using tag: $TAG -> version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
