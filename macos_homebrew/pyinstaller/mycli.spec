@@ -7,6 +7,21 @@ import os
 import importlib.util
 from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files
 
+# ---------------------------
+# Project Paths Setup
+# ---------------------------
+PROJECT_ROOT = os.getcwd()
+# Check if we need to adjust the root path
+entry_script_check = os.path.join(PROJECT_ROOT, "src", "mycli_app", "cli.py")
+if not os.path.exists(entry_script_check):
+    # fallback if running from spec directory
+    alt_root = os.path.abspath(os.path.join(PROJECT_ROOT, "..", ".."))
+    candidate = os.path.join(alt_root, "src", "mycli_app", "cli.py")
+    if os.path.exists(candidate):
+        PROJECT_ROOT = alt_root
+
+print(f"Project root: {PROJECT_ROOT}")
+
 # Toggle Azure & Broker extras via environment variable
 INCLUDE_AZURE = os.environ.get("MYCLI_WITH_AZURE", "1") == "1"
 
@@ -113,17 +128,9 @@ except Exception as e:
 # ---------------------------
 # Entry Script & Paths
 # ---------------------------
-PROJECT_ROOT = os.getcwd()
 entry_script = os.path.join(PROJECT_ROOT, "src", "mycli_app", "cli.py")
 if not os.path.exists(entry_script):
-    # fallback if running from spec directory
-    alt_root = os.path.abspath(os.path.join(PROJECT_ROOT, "..", ".."))
-    candidate = os.path.join(alt_root, "src", "mycli_app", "cli.py")
-    if os.path.exists(candidate):
-        PROJECT_ROOT = alt_root
-        entry_script = candidate
-    else:
-        raise FileNotFoundError(f"Cannot find entry script at {entry_script}")
+    raise FileNotFoundError(f"Cannot find entry script at {entry_script}")
 
 pathex = [PROJECT_ROOT]
 
