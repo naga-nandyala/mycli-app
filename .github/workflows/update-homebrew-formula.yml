@@ -3,6 +3,12 @@ name: Update Homebrew Formula
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to update formula for (e.g., 0.1.0). Leave empty to use latest release.'
+        required: false
+        type: string
 
 jobs:
   update-formula:
@@ -31,7 +37,12 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add macos_homebrew/formula_template/mycli_split_arch.rb
-        git diff --staged --quiet || git commit -m "Update Homebrew formula for release ${{ github.event.release.tag_name }}"
+        if [ "${{ github.event_name }}" = "release" ]; then
+          COMMIT_MSG="Update Homebrew formula for release ${{ github.event.release.tag_name }}"
+        else
+          COMMIT_MSG="Update Homebrew formula (manual trigger)"
+        fi
+        git diff --staged --quiet || git commit -m "$COMMIT_MSG"
         git push
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
