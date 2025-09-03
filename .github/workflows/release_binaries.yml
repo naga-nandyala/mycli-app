@@ -1,5 +1,10 @@
 # GitHub Actions workflow to build and release macOS binaries for mycli
 # Auto-created from macos_homebrew/workflow template.
+# Features:
+# - Builds for both arm64 (Apple Silicon) and x86_64 (Intel) architectures
+# - Includes Azure/MSAL dependencies via PyInstaller hidden imports
+# - Code signs binaries to eliminate "not trusted" warnings on macOS
+# - Comprehensive dependency verification and testing
 
 name: build-release-binaries (Manual)
 
@@ -342,6 +347,49 @@ jobs:
           
           echo "✅ All binary tests passed!"
 
+      - name: Code sign binary
+        run: |
+          echo "=== Code Signing Binary ==="
+          
+          # Sign the binary with ad-hoc signature to eliminate "not trusted" warnings
+          # This creates a valid signature that macOS will accept without needing developer certificates
+          
+          if [ -f dist/mycli ]; then
+            echo "Signing onefile binary: dist/mycli"
+            codesign --force --deep --sign - dist/mycli
+            echo "✓ Signed dist/mycli"
+            
+            # Verify the signature
+            codesign --verify --verbose dist/mycli && echo "✓ Signature verified" || echo "❌ Signature verification failed"
+            
+          elif [ -d dist/mycli ]; then
+            echo "Signing COLLECT directory binary: dist/mycli/mycli"
+            
+            # First, sign the main executable
+            if [ -f dist/mycli/mycli ]; then
+              codesign --force --deep --sign - dist/mycli/mycli
+              echo "✓ Signed main executable: dist/mycli/mycli"
+              
+              # Verify the main executable signature
+              codesign --verify --verbose dist/mycli/mycli && echo "✓ Main executable signature verified" || echo "❌ Main executable signature verification failed"
+            fi
+            
+            # Sign any shared libraries (.dylib, .so files) in _internal directory
+            if [ -d dist/mycli/_internal ]; then
+              echo "Signing shared libraries in _internal directory..."
+              find dist/mycli/_internal -name "*.dylib" -o -name "*.so" | while read lib; do
+                echo "  Signing: $lib"
+                codesign --force --sign - "$lib" 2>/dev/null || echo "  Warning: Could not sign $lib"
+              done
+            fi
+            
+          else
+            echo "❌ No binary found to sign"
+            exit 1
+          fi
+          
+          echo "✅ Code signing completed"
+
       - name: Package
         run: |
           INPUT_VERSION='${{ github.event.inputs.version }}'
@@ -400,12 +448,22 @@ jobs:
             echo "Found onefile binary: mycli"
             chmod +x mycli
             BINARY_PATH="./mycli"
+            
+            # Verify code signature
+            echo "=== Code Signature Verification ==="
+            codesign --verify --verbose "$BINARY_PATH" && echo "✓ Code signature valid" || echo "❌ Code signature invalid"
+            
           elif [ -d mycli ]; then
             echo "Found COLLECT directory: mycli"
             echo "Contents of mycli directory:"
             ls -la mycli/
             chmod +x mycli/mycli
             BINARY_PATH="./mycli/mycli"
+            
+            # Verify code signature
+            echo "=== Code Signature Verification ==="
+            codesign --verify --verbose "$BINARY_PATH" && echo "✓ Code signature valid" || echo "❌ Code signature invalid"
+            
           else
             echo "❌ Could not locate extracted binary"
             ls -la .

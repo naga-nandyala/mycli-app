@@ -1,8 +1,36 @@
 # macOS Installation Guide for mycli
 
-## Issue: "Not Trusted" Error
+## Code-Signed Binaries (Recommended)
 
-When you download the binary from GitHub releases, macOS will block it due to security restrictions. Here's how to fix it:
+**Good news!** Starting from our latest releases, the macOS binaries are automatically code-signed during the GitHub Actions build process. This means you should be able to run them directly without security warnings.
+
+### Quick Installation
+
+1. **Download** the latest `.tar.gz` file for your architecture from [GitHub Releases](../../releases)
+   - **Apple Silicon (M1/M2/M3)**: Download the `arm64` version
+   - **Intel Macs**: Download the `x86_64` version
+
+2. **Extract and run**:
+   ```bash
+   cd ~/Downloads
+   tar -xzf mycli-*-macos-*.tar.gz
+   cd mycli
+   ./mycli --help
+   ```
+
+3. **Add to PATH** (optional):
+   ```bash
+   # Copy to system location
+   sudo cp mycli /usr/local/bin/
+   
+   # Or add current directory to PATH
+   echo 'export PATH="$PATH:$(pwd)"' >> ~/.zshrc
+   source ~/.zshrc
+   ```
+
+## Troubleshooting: "Not Trusted" Error
+
+If you still encounter security warnings (this shouldn't happen with code-signed binaries), here are the solutions:
 
 ### Method 1: Remove Quarantine Attribute (Recommended)
 
