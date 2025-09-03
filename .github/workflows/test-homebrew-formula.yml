@@ -55,15 +55,22 @@ jobs:
         run: |
           echo "🧹 Cleaning up any previous installations..."
           brew uninstall mycli-app 2>/dev/null || echo "No previous installation found"
+          brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No previous tap found"
       
       - name: Test Homebrew formula installation
         run: |
           echo "🍺 Installing mycli-app via Homebrew..."
-          # Use the formula from the checked out repository
-          echo "📁 Using formula file from repository:"
-          cat Formula/mycli-app.rb
-          echo "🔧 Installing from local file:"
-          brew install ./Formula/mycli-app.rb
+          
+          # Create a temporary tap structure
+          echo "� Setting up temporary tap structure..."
+          mkdir -p $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula
+          cp Formula/mycli-app.rb $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula/
+          
+          echo "� Tap structure created:"
+          ls -la $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula/
+          
+          echo "🍺 Installing via tap:"
+          brew install naga-nandyala/mycli-app/mycli-app
       
       - name: Verify installation
         run: |
@@ -126,7 +133,7 @@ jobs:
       - name: Test formula info
         run: |
           echo "📊 Formula information:"
-          brew info mycli-app
+          brew info naga-nandyala/mycli-app/mycli-app
           
           echo "📁 Installation files:"
           brew list mycli-app
@@ -136,6 +143,8 @@ jobs:
         run: |
           echo "🧹 Final cleanup..."
           brew uninstall mycli-app 2>/dev/null || echo "Nothing to uninstall"
+          brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No tap to remove"
+          rm -rf $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app 2>/dev/null || echo "Tap directory already clean"
       
       - name: Report results
         if: always()

@@ -18,12 +18,16 @@ A simple CLI application similar to Azure CLI with Azure authentication capabili
 ### macOS via Homebrew (Recommended)
 
 ```bash
-# One-liner installation
-curl -L https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb | brew install --formula /dev/stdin
+# Method 1: Create temporary tap (easiest)
+brew tap naga-nandyala/mycli-app https://github.com/naga-nandyala/mycli-app
+brew install mycli-app
 
-# Or download and install separately
+# Method 2: Manual download and install
 curl -L -o /tmp/mycli-app.rb https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb
-brew install /tmp/mycli-app.rb
+# Create temporary tap structure
+mkdir -p $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula
+cp /tmp/mycli-app.rb $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula/
+brew install naga-nandyala/mycli-app/mycli-app
 
 # Verify installation
 mycli --version
