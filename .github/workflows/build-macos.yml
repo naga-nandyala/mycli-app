@@ -1,8 +1,6 @@
-name: Build macOS Distributions
+name: Build macOS Distributions (Manual Only)
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
@@ -19,6 +17,14 @@ on:
           - zip
           - app
           - dmg
+      create_release:
+        description: 'Create a draft GitHub Release with artifacts'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   build-macos:
@@ -51,23 +57,14 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          if [ "${{ github.event_name }}" == "push" ]; then
-            VERSION="${{ github.ref_name }}"
-            VERSION="${VERSION#v}"  # Remove 'v' prefix if present
-          else
-            VERSION="${{ github.event.inputs.version }}"
-          fi
+          VERSION="${{ github.event.inputs.version }}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
           
       - name: Determine build type
         id: build_type
         run: |
-          if [ "${{ github.event_name }}" == "push" ]; then
-            BUILD_TYPE="all"
-          else
-            BUILD_TYPE="${{ github.event.inputs.build_type }}"
-          fi
+          BUILD_TYPE="${{ github.event.inputs.build_type }}"
           echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
           echo "Building type: $BUILD_TYPE"
           
@@ -105,9 +102,9 @@ jobs:
           path: dist_macos/*.dmg
           retention-days: 30
           
-      - name: Create Release (for tags)
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+      - name: Create Release
+        if: ${{ github.event.inputs.create_release == 'true' }}
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             dist_macos/*.zip

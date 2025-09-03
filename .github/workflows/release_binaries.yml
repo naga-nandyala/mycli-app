@@ -1,17 +1,27 @@
 # GitHub Actions workflow to build and release macOS binaries for mycli
 # Auto-created from macos_homebrew/workflow template.
 
-name: build-release-binaries
+name: build-release-binaries (Manual)
 
 # Ensure GITHUB_TOKEN can create releases
 permissions:
   contents: write
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version string (e.g. 1.2.3)'
+        required: true
+        default: '0.1.0'
+      create_release:
+        description: 'Create GitHub Release (true/false)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   build-macos:
@@ -55,7 +65,14 @@ jobs:
 
       - name: Package
         run: |
-          VERSION=$(grep '__version__' src/mycli_app/__init__.py | cut -d '"' -f2)
+          INPUT_VERSION='${{ github.event.inputs.version }}'
+          CODE_VERSION=$(grep '__version__' src/mycli_app/__init__.py | cut -d '"' -f2)
+          if [ "$INPUT_VERSION" != "$CODE_VERSION" ]; then
+            echo "Warning: input version ($INPUT_VERSION) != code version ($CODE_VERSION). Using input." >&2
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="$CODE_VERSION"
+          fi
           ARCH=${{ matrix.arch }}
           # Binary path differs when using spec (folder build). Adjust if needed.
           if [ -f dist/mycli ]; then
@@ -71,6 +88,7 @@ jobs:
           tar -czf "$TAR_NAME" mycli
           shasum -a 256 "$TAR_NAME" > "$TAR_NAME.sha256"
           echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -88,6 +106,15 @@ jobs:
         with:
           path: artifacts
 
+      - name: Extract version
+        id: set_version
+        run: |
+          # Find first version from tarball names
+          V=$(find artifacts -name 'mycli-*-macos-*.tar.gz' | head -n1 | sed -E 's/.*mycli-([0-9]+\.[0-9]+\.[0-9]+)-macos-.*/\1/')
+          if [ -z "$V" ]; then echo "Could not determine version" >&2; exit 1; fi
+          echo "Detected version: $V"
+          echo "version=$V" >> $GITHUB_OUTPUT
+
       - name: Display artifacts
         run: ls -R artifacts
 
@@ -98,9 +125,14 @@ jobs:
           find artifacts -name '*.sha256' -exec cp {} upload/ \;
 
       - name: Create Release
+        if: ${{ github.event.inputs.create_release == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           files: upload/*
           token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: v${{ steps.set_version.outputs.version }}
+          name: mycli v${{ steps.set_version.outputs.version }}
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
