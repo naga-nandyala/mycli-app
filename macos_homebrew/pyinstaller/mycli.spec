@@ -60,13 +60,55 @@ print(f"Hidden imports included ({len(hiddenimports)}): {hiddenimports}")
 # Data Files
 # ---------------------------
 # Include any non-Python files your CLI needs
-datas = collect_data_files("mycli_app")  # collects all package data files
+datas = []
+
+# Try to collect package data files safely
+try:
+    package_datas = collect_data_files("mycli_app")
+    datas.extend(package_datas)
+    print(f"Collected {len(package_datas)} package data files")
+except Exception as e:
+    print(f"Warning: Could not collect mycli_app data files: {e}")
+
+# Check for optional config files (don't fail if missing)
+config_files = [
+    ("src/mycli_app/config.yaml", "."),
+    ("config.yaml", "."),
+]
+
+for src_path, dest_path in config_files:
+    full_src = os.path.join(PROJECT_ROOT, src_path)
+    if os.path.exists(full_src):
+        datas.append((full_src, dest_path))
+        print(f"Added config file: {src_path}")
+        break  # Only add first found config
+else:
+    print("Note: No config.yaml found (this is optional)")
 
 # ---------------------------
 # Binaries
 # ---------------------------
 # Include compiled shared libraries
-binaries = collect_dynamic_libs("cryptography") + collect_dynamic_libs("pymsalruntime")
+binaries = []
+
+# Try to collect cryptography libraries (essential)
+try:
+    crypto_libs = collect_dynamic_libs("cryptography")
+    binaries.extend(crypto_libs)
+    print(f"Added {len(crypto_libs)} cryptography libraries")
+except Exception as e:
+    print(f"Warning: Could not collect cryptography libraries: {e}")
+
+# Try to collect pymsalruntime libraries (optional)
+try:
+    if can_import("pymsalruntime"):
+        msal_libs = collect_dynamic_libs("pymsalruntime")
+        binaries.extend(msal_libs)
+        print(f"Added {len(msal_libs)} pymsalruntime libraries")
+    else:
+        print("pymsalruntime not available, skipping binary collection")
+except Exception as e:
+    print(f"Warning: Could not collect pymsalruntime libraries: {e}")
 
 # ---------------------------
 # Entry Script & Paths
