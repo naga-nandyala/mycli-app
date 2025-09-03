@@ -1,0 +1,164 @@
+name: Build macOS binaries and update Homebrew tap (binary formula)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # for creating/updating releases
+  actions: read
+
+env:
+  APP_NAME: mycli
+  REPO_OWNER: naga-nandyala
+  TAP_REPO: homebrew-tap
+
+jobs:
+  build-macos:
+    name: Build binary (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: x64
+            runner: macos-13
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+            python-version: '3.12'
+
+      - name: Derive version from tag
+        id: vars
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          VERSION=${TAG#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          # Install project with optional extras you want baked into the binary. Adjust if you want a slimmer binary.
+          pip install .[azure,broker] pyinstaller
+
+      - name: Build single-file binary with PyInstaller
+        run: |
+          pyinstaller --name "$APP_NAME" --onefile --clean --paths src src/mycli_app/cli.py
+          ls -l dist
+
+      - name: Create zip asset
+        id: package
+        run: |
+          cd dist
+          # VERSION is available as environment variable (exported earlier)
+          ZIP_NAME=${APP_NAME}-${VERSION}-macos-${{ matrix.arch }}.zip
+          # Ensure binary is executable
+          chmod +x ${APP_NAME}
+          # Zip with binary at archive root (Homebrew formula expects this)
+          /usr/bin/zip -9 $ZIP_NAME ${APP_NAME}
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+          echo "zip_name=$ZIP_NAME" >> $GITHUB_OUTPUT
+          shasum -a 256 $ZIP_NAME > $ZIP_NAME.sha256
+          cat $ZIP_NAME.sha256
+          mv $ZIP_NAME ../
+          mv $ZIP_NAME.sha256 ../
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.arch }}
+          path: |
+            ./$(echo ${{ steps.package.outputs.zip_name }})
+            ./$(echo ${{ steps.package.outputs.zip_name }}).sha256
+
+      - name: Upload / update GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.package.outputs.zip_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-formula:
+    name: Update Homebrew tap formula
+    needs: build-macos
+    runs-on: macos-latest
+    steps:
+      - name: Download build artifacts (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-arm64
+          path: dist/arm64
+
+      - name: Download build artifacts (x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-x64
+          path: dist/x64
+
+      - name: Compute SHAs
+        id: shas
+        run: |
+          ARM_ZIP=$(ls dist/arm64/*.zip)
+          X64_ZIP=$(ls dist/x64/*.zip)
+          ARM_SHA=$(shasum -a 256 "$ARM_ZIP" | awk '{print $1}')
+          X64_SHA=$(shasum -a 256 "$X64_ZIP" | awk '{print $1}')
+          echo "arm_sha=$ARM_SHA" >> $GITHUB_OUTPUT
+          echo "x64_sha=$X64_SHA" >> $GITHUB_OUTPUT
+          echo "ARM_SHA=$ARM_SHA" >> $GITHUB_ENV
+          echo "X64_SHA=$X64_SHA" >> $GITHUB_ENV
+          # Derive version from filename (mycli-<ver>-macos-arch.zip)
+          BASENAME=$(basename "$ARM_ZIP")
+          VERSION=$(echo $BASENAME | sed -E 's/^[^-]+-([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')
+          echo VERSION=$VERSION >> $GITHUB_ENV
+
+      - name: Clone tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO_OWNER }}/${{ env.TAP_REPO }}
+          token: ${{ secrets.HOMEBREW_TAP_PAT }}
+          path: tap
+
+      - name: Update formula file
+        run: |
+          FORMULA_DIR="tap/Formula"
+          mkdir -p "$FORMULA_DIR"
+          FORMULA_FILE="$FORMULA_DIR/${APP_NAME}.rb"
+          # Use existing template from repo to avoid embedding Ruby directly here
+          cp packaging/homebrew/mycli_binary_formula_template.rb "$FORMULA_FILE"
+          # Replace placeholders (macOS sed uses -i '')
+          sed -i '' "s/__VERSION__/${VERSION}/g" "$FORMULA_FILE"
+          sed -i '' "s/__ARM_SHA__/${ARM_SHA}/" "$FORMULA_FILE"
+          sed -i '' "s/__X64_SHA__/${X64_SHA}/" "$FORMULA_FILE"
+
+      - name: Commit & push
+        run: |
+          cd tap
+          git config user.name "homebrew-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add Formula/${APP_NAME}.rb
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update ${APP_NAME} formula to v${VERSION}"
+            git push
+          fi
+
+      - name: Output formula
+        run: |
+          echo "--- Formula Content ---"
+          cat tap/Formula/${APP_NAME}.rb
+
+      - name: Brew audit (optional)
+        run: |
+          brew tap ${REPO_OWNER}/tap https://github.com/${REPO_OWNER}/${TAP_REPO}
+          brew audit --strict ${REPO_OWNER}/tap/${APP_NAME}
+        continue-on-error: true
