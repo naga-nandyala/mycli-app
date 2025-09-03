@@ -112,15 +112,15 @@ def main():
     """Main function to update Homebrew formula."""
     repo_owner = "naga-nandyala"
     repo_name = "mycli-app"
-
-    # Get the formula template path
-    script_dir = Path(__file__).parent
-    template_path = script_dir / "formula_template" / "mycli_split_arch.rb"
-
+    
+    # Get the formula path (now in the main repo)
+    script_dir = Path(__file__).parent.parent  # Go up to main repo root
+    template_path = script_dir / "Formula" / "mycli.rb"
+    
     if not template_path.exists():
-        print(f"Error: Formula template not found at {template_path}")
+        print(f"Error: Formula not found at {template_path}")
         sys.exit(1)
-
+    
     print(f"Fetching latest release info for {repo_owner}/{repo_name}...")
     release_info = get_latest_release_info(repo_owner, repo_name)
 

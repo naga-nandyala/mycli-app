@@ -42,7 +42,7 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add macos_homebrew/formula_template/mycli_split_arch.rb
+        git add Formula/mycli.rb
         if [ "${{ github.event_name }}" = "release" ]; then
           COMMIT_MSG="Update Homebrew formula for release ${{ github.event.release.tag_name }}"
         else
