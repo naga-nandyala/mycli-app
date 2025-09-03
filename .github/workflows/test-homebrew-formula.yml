@@ -1,0 +1,171 @@
+name: Test Homebrew Formula
+
+on:
+  # Test after formula updates
+  push:
+    paths:
+      - 'Formula/mycli.rb'
+  
+  # Test after releases (when binaries are updated)
+  release:
+    types: [published]
+  
+  # Allow manual testing
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: 'Version to test (leave empty for latest)'
+        required: false
+        type: string
+
+jobs:
+  test-homebrew-installation:
+    name: Test Homebrew Installation
+    
+    strategy:
+      matrix:
+        # Test on both Intel and Apple Silicon runners when available
+        # For now, macos-latest covers Apple Silicon
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-13  # Intel runner
+            arch: x86_64
+    
+    runs-on: ${{ matrix.runner }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+      
+      - name: Get system info
+        run: |
+          echo "🖥️  System Information:"
+          echo "Runner: ${{ matrix.runner }}"
+          echo "Expected Architecture: ${{ matrix.arch }}"
+          echo "Actual Architecture: $(uname -m)"
+          echo "macOS Version: $(sw_vers -productVersion)"
+          echo "Homebrew Version: $(brew --version | head -n1)"
+      
+      - name: Clean previous installations
+        run: |
+          echo "🧹 Cleaning up any previous installations..."
+          brew uninstall mycli 2>/dev/null || echo "No previous installation found"
+          brew untap naga-nandyala/mycli-app 2>/dev/null || echo "Tap not previously added"
+      
+      - name: Test Homebrew formula installation
+        run: |
+          echo "🍺 Installing mycli via Homebrew..."
+          brew install naga-nandyala/mycli-app/mycli
+      
+      - name: Verify installation
+        run: |
+          echo "✅ Verifying installation..."
+          
+          # Check if mycli is in PATH
+          if ! command -v mycli &> /dev/null; then
+            echo "❌ mycli command not found in PATH"
+            exit 1
+          fi
+          
+          # Check version output
+          echo "📋 Version check:"
+          mycli_version=$(mycli --version)
+          echo "Output: $mycli_version"
+          
+          # Verify it contains expected text
+          if [[ "$mycli_version" =~ "MyCliApp version" ]]; then
+            echo "✅ Version check passed"
+          else
+            echo "❌ Version check failed - unexpected output"
+            exit 1
+          fi
+      
+      - name: Test basic functionality
+        run: |
+          echo "🔧 Testing basic functionality..."
+          
+          # Test help command
+          echo "📋 Help command test:"
+          mycli --help
+          
+          # Test if binary architecture matches system
+          echo "🏗️  Architecture verification:"
+          binary_path=$(which mycli)
+          echo "Binary location: $binary_path"
+          
+          if command -v file &> /dev/null; then
+            file_output=$(file "$binary_path")
+            echo "File output: $file_output"
+            
+            case "${{ matrix.arch }}" in
+              "arm64")
+                if [[ "$file_output" =~ "arm64" ]]; then
+                  echo "✅ ARM64 binary verification passed"
+                else
+                  echo "⚠️  Architecture mismatch detected but continuing..."
+                fi
+                ;;
+              "x86_64")
+                if [[ "$file_output" =~ "x86_64" ]]; then
+                  echo "✅ x86_64 binary verification passed"
+                else
+                  echo "⚠️  Architecture mismatch detected but continuing..."
+                fi
+                ;;
+            esac
+          fi
+      
+      - name: Test formula info
+        run: |
+          echo "📊 Formula information:"
+          brew info naga-nandyala/mycli-app/mycli
+          
+          echo "📁 Installation files:"
+          brew list mycli
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "🧹 Final cleanup..."
+          brew uninstall mycli 2>/dev/null || echo "Nothing to uninstall"
+          brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No tap to remove"
+      
+      - name: Report results
+        if: always()
+        run: |
+          echo "🎯 Test Results Summary:"
+          echo "Runner: ${{ matrix.runner }}"
+          echo "Architecture: ${{ matrix.arch }}"
+          echo "Status: ${{ job.status }}"
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "✅ All tests passed!"
+          else
+            echo "❌ Some tests failed"
+          fi
+
+  notify-results:
+    name: Notify Test Results
+    needs: test-homebrew-installation
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check test results
+        run: |
+          echo "🎯 Overall Test Results:"
+          echo "Needed jobs status: ${{ needs.test-homebrew-installation.result }}"
+          
+          if [[ "${{ needs.test-homebrew-installation.result }}" == "success" ]]; then
+            echo "✅ All Homebrew tests passed successfully!"
+            echo "🍺 Formula is working correctly on all tested platforms"
+          else
+            echo "❌ Some Homebrew tests failed"
+            echo "🔍 Check the job logs for details"
+            exit 1
+          fi
