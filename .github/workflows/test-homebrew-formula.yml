@@ -59,7 +59,11 @@ jobs:
       - name: Test Homebrew formula installation
         run: |
           echo "🍺 Installing mycli-app via Homebrew..."
-          brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb
+          # Use the formula from the checked out repository
+          echo "📁 Using formula file from repository:"
+          cat Formula/mycli-app.rb
+          echo "🔧 Installing from local file:"
+          brew install ./Formula/mycli-app.rb
       
       - name: Verify installation
         run: |

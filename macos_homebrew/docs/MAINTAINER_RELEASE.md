@@ -50,7 +50,8 @@ Test the updated formula:
 brew uninstall mycli 2>/dev/null || true
 
 # Install from your repository
-brew install https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb
+curl -L -o /tmp/mycli-app.rb https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb
+brew install /tmp/mycli-app.rb
 
 # Verify installation
 mycli --version
