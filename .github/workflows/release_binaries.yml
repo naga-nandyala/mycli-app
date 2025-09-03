@@ -47,10 +47,32 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install build deps
+      - name: Install build deps and package
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller build
+          echo "=== Installing package with extras ==="
+          echo "Installing with extras: ${{ env.MYCLI_EXTRAS }}"
+          # Install the package with extras so PyInstaller can find all dependencies
+          python -m pip install -e ".[${{ env.MYCLI_EXTRAS }}]"
+          echo "=== Installation complete ==="
+
+      - name: Verify package installation
+        run: |
+          echo "=== All installed packages ==="
+          python -m pip list
+          echo ""
+          echo "=== Azure/MSAL packages ==="
+          python -m pip list | grep -E "(azure|msal|cryptography)" || echo "No Azure/MSAL packages found"
+          echo ""
+          echo "=== Testing package import ==="
+          python -c "import mycli_app.cli; print('Package import successful')"
+          if [ "${{ env.MYCLI_WITH_AZURE }}" = "1" ]; then
+            echo "=== Testing Azure imports ==="
+            python -c "import azure.identity; print('✓ azure.identity imported successfully')" || echo "✗ azure.identity import failed"
+            python -c "import msal; print('✓ msal imported successfully')" || echo "✗ msal import failed"
+            python -c "import pymsalruntime; print('✓ pymsalruntime imported successfully')" || echo "✗ pymsalruntime import failed"
+          fi
 
       - name: Build binary (spec file)
         run: |

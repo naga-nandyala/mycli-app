@@ -1,55 +1,62 @@
 # PyInstaller spec file for building the mycli standalone binary
 # Usage (run on macOS for each architecture):
 #   pyinstaller mycli.spec
-# Adjust hiddenimports if enabling Azure features.
+# Package should be installed with extras: pip install -e .[azure,broker]
 
 import os
-from PyInstaller.utils.hooks import collect_submodules
+import importlib.util
 
 # Toggle to include azure dependencies (increases size)
 INCLUDE_AZURE = True if os.environ.get("MYCLI_WITH_AZURE", "0") == "1" else False
 
+def can_import(module_name):
+    """Check if a module can be imported"""
+    try:
+        spec = importlib.util.find_spec(module_name)
+        return spec is not None
+    except (ImportError, ValueError, ModuleNotFoundError):
+        return False
+
 hiddenimports = []
 if INCLUDE_AZURE:
-    # Explicitly list all packages from pyproject.toml azure + broker extras
-    azure_pkgs = [
-        "azure.identity",
-        "azure.core", 
-        "azure.mgmt.core",
-        "msal",
-        # Additional packages that might be pulled in by msal[broker]
-        "pymsalruntime",
-        "cryptography",
-        "requests",
-        "requests_oauthlib",
-    ]
-    
-    print(f"Including Azure packages: {azure_pkgs}")
-    
-    for pkg in azure_pkgs:
-        try:
-            submodules = collect_submodules(pkg)
-            hiddenimports.extend(submodules)
-            print(f"Added {len(submodules)} submodules for {pkg}")
-        except Exception as e:
-            print(f"Warning: Could not collect submodules for {pkg}: {e}")
-    
-    # Add specific modules that might be missed by auto-detection
-    additional_imports = [
+    # Only add hidden imports for modules that are actually available
+    potential_imports = [
+        # Core MSAL modules that might be dynamically imported
         "msal.application",
         "msal.oauth2cli", 
         "msal.token_cache",
-        "azure.identity._credentials",
-        "azure.identity._internal", 
+        "msal.authority",
+        "msal.client_credential",
+        # Azure identity internals
+        "azure.identity._credentials", 
+        "azure.identity._internal",
+        "azure.identity._internal.decorators",
+        # Azure core essentials
         "azure.core.credentials",
         "azure.core.pipeline",
+        "azure.core.pipeline.policies",
+        # PyMSAL Runtime (broker support)
+        "pymsalruntime",
         "pymsalruntime.broker",
         "pymsalruntime.msalruntime",
+        # Cryptography backends
+        "cryptography.hazmat.backends.openssl",
+        "cryptography.hazmat.bindings._rust",
     ]
     
-    hiddenimports.extend(additional_imports)
-    print(f"Added {len(additional_imports)} additional specific imports")
-    print(f"Total hiddenimports: {len(hiddenimports)}")
+    available_imports = []
+    for module in potential_imports:
+        if can_import(module):
+            available_imports.append(module)
+        else:
+            print(f"Warning: Module {module} not available, skipping hidden import")
+    
+    hiddenimports = available_imports
+    print(f"Adding {len(hiddenimports)} available Azure-specific hidden imports")
+    if hiddenimports:
+        print(f"Available imports: {hiddenimports}")
+    else:
+        print("Warning: No Azure modules found! Package may not be installed with extras.")
 
 block_cipher = None
 
