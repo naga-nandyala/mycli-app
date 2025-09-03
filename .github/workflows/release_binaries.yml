@@ -34,17 +34,34 @@ jobs:
       - name: Install build deps
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pyinstaller
+          python -m pip install pyinstaller build
+          # Install project (uses pyproject.toml for dependencies). Set MYCLI_EXTRAS (e.g. azure,broker) to include extras.
+          if [ "${MYCLI_EXTRAS:-}" != "" ]; then
+            pip install ".[${MYCLI_EXTRAS}]"
+          else
+            pip install .
+          fi
 
-      - name: Build binary
+      - name: Build binary (spec file)
         run: |
-          python -m PyInstaller --name mycli --onefile src/mycli_app/cli.py
+          # Set MYCLI_WITH_AZURE=1 in job/env or before this line to include optional azure packages.
+          pyinstaller macos_homebrew/pyinstaller/mycli.spec --clean
+          echo "PyInstaller build finished. Contents of dist/:"
+          ls -R dist
 
       - name: Package
         run: |
           VERSION=$(grep '__version__' src/mycli_app/__init__.py | cut -d '"' -f2)
           ARCH=${{ matrix.arch }}
-          cp dist/mycli mycli
+          # Binary path differs when using spec (folder build). Adjust if needed.
+          if [ -f dist/mycli ]; then
+            cp dist/mycli mycli
+          elif [ -f dist/mycli/mycli ]; then
+            cp dist/mycli/mycli mycli
+          else
+            echo "Could not locate built binary" >&2
+            exit 1
+          fi
           chmod +x mycli
           TAR_NAME="mycli-${VERSION}-macos-${ARCH}.tar.gz"
           tar -czf "$TAR_NAME" mycli
@@ -54,10 +71,10 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.TAR_NAME }}
+          name: mycli-macos-${{ matrix.arch }}
           path: |
-            ${{ env.TAR_NAME }}
-            ${{ env.TAR_NAME }}.sha256
+            *.tar.gz
+            *.tar.gz.sha256
 
   release:
     needs: build-macos
