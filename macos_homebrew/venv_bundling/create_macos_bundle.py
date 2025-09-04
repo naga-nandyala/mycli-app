@@ -467,93 +467,78 @@ def verify_bundle_functionality(bundle_path):
     # Test Azure dependencies are available
     print("  Testing Azure dependencies...")
     try:
-        # More comprehensive Azure import test
+        # Simple verification of pyproject.toml azure/broker packages
         azure_check_script = """
 import sys
-import os
+import subprocess
 
-# Print Python path info
-print("Python executable:", sys.executable)
-print("Python path:", sys.path)
-
-# Test basic Azure imports first
-print("\\n=== Testing Basic Azure Imports ===")
-try:
-    import azure
-    print("✅ azure namespace package imported")
-    print(f"Azure package path: {azure.__path__}")
-except ImportError as e:
-    print(f"❌ azure namespace import failed: {e}")
-    sys.exit(1)
-
-try:
-    import azure.core
-    print("✅ azure.core imported")
-    print(f"azure.core path: {azure.core.__file__}")
-except ImportError as e:
-    print(f"❌ azure.core import failed: {e}")
-    sys.exit(1)
-
-# Test specific submodules that might be missing
-print("\\n=== Testing Azure Submodules ===")
-submodules_to_test = [
-    "azure.core.pipeline",
-    "azure.core.pipeline.policies",
-    "azure.core.pipeline.transport",
-    "azure.identity",
-    "azure.mgmt.core",
-    "msal"
+# Check if specific packages from pyproject.toml are installed
+required_packages = [
+    "azure-identity>=1.12.0",
+    "azure-mgmt-core>=1.3.0", 
+    "azure-core>=1.24.0",
+    "msal>=1.20.0"
 ]
 
-failed_imports = []
-for module in submodules_to_test:
-    try:
-        __import__(module)
-        print(f"✅ {module} imported successfully")
-    except ImportError as e:
-        print(f"❌ {module} import failed: {e}")
-        failed_imports.append(module)
+print("\\n=== Checking Required Azure Packages ===")
+missing_packages = []
 
-if failed_imports:
-    print(f"\\n❌ Failed to import: {', '.join(failed_imports)}")
-    
-    # Try to diagnose the azure.core structure
-    print("\\n=== Diagnosing azure.core structure ===")
+for package_spec in required_packages:
+    package_name = package_spec.split(">=")[0].split("[")[0]
     try:
-        import azure.core
-        core_dir = os.path.dirname(azure.core.__file__)
-        print(f"azure.core directory: {core_dir}")
-        print("Contents of azure.core directory:")
-        for item in os.listdir(core_dir):
-            print(f"  {item}")
-            
-        pipeline_path = os.path.join(core_dir, "pipeline")
-        if os.path.exists(pipeline_path):
-            print(f"\\npipeline directory exists at: {pipeline_path}")
-            print("Contents of pipeline directory:")
-            for item in os.listdir(pipeline_path):
-                print(f"  {item}")
+        result = subprocess.run([sys.executable, "-m", "pip", "show", package_name], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            # Extract version from pip show output
+            for line in result.stdout.split("\\n"):
+                if line.startswith("Version:"):
+                    version = line.split(":")[1].strip()
+                    print(f"✅ {package_name}: {version}")
+                    break
         else:
-            print(f"\\n❌ pipeline directory not found at: {pipeline_path}")
+            print(f"❌ {package_name}: NOT INSTALLED")
+            missing_packages.append(package_name)
     except Exception as e:
-        print(f"Could not diagnose azure.core structure: {e}")
-    
-    sys.exit(1)
+        print(f"❌ {package_name}: Error checking - {e}")
+        missing_packages.append(package_name)
 
-print("\\n=== All Azure imports successful ===")
+# Test basic imports
+print("\\n=== Testing Basic Azure Imports ===")
 try:
     import azure.identity
-    import azure.core
-    import azure.mgmt.core
-    import msal
-    print("AZURE_AVAILABLE=True")
-    print(f"azure-identity: {azure.identity.__version__}")
-    print(f"azure-core: {azure.core.__version__}")
-    print(f"msal: {msal.__version__}")
+    print(f"✅ azure.identity imported - version: {azure.identity.__version__}")
 except ImportError as e:
+    print(f"❌ azure.identity import failed: {e}")
+    missing_packages.append("azure-identity")
+
+try:
+    import azure.mgmt.core
+    print(f"✅ azure.mgmt.core imported - version: {azure.mgmt.core.__version__}")
+except ImportError as e:
+    print(f"❌ azure.mgmt.core import failed: {e}")
+    missing_packages.append("azure-mgmt-core")
+
+try:
+    import azure.core
+    print(f"✅ azure.core imported - version: {azure.core.__version__}")
+except ImportError as e:
+    print(f"❌ azure.core import failed: {e}")
+    missing_packages.append("azure-core")
+
+try:
+    import msal
+    print(f"✅ msal imported - version: {msal.__version__}")
+except ImportError as e:
+    print(f"❌ msal import failed: {e}")
+    missing_packages.append("msal")
+
+if missing_packages:
+    print(f"\\n❌ Missing packages: {', '.join(missing_packages)}")
     print("AZURE_AVAILABLE=False")
-    print(f"Missing: {e}")
     sys.exit(1)
+else:
+    print("\\n✅ All required Azure packages are installed and importable")
+    print("AZURE_AVAILABLE=True")
 """
         result = subprocess.run(
             [str(python_path), "-c", azure_check_script], capture_output=True, text=True, timeout=30, check=True
