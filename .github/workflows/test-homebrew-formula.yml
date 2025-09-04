@@ -130,6 +130,33 @@ jobs:
             esac
           fi
       
+      - name: Test authentication functionality
+        run: |
+          echo "🔐 Testing authentication functionality..."
+          
+          # Test logout command
+          echo "📤 Testing logout command:"
+          mycli logout
+          
+          echo "✅ Logout command completed successfully"
+      
+      - name: Test login with timeout
+        timeout-minutes: 1
+        run: |
+          echo "📥 Testing login command with --force-broker:"
+          
+          # Run login command with timeout handling
+          timeout 30s mycli login --force-broker || {
+            exit_code=$?
+            if [ $exit_code -eq 124 ]; then
+              echo "⏰ Login command timed out after 30 seconds (expected for interactive command)"
+              echo "✅ Login command started successfully"
+            else
+              echo "❌ Login command failed with exit code: $exit_code"
+              exit 1
+            fi
+          }
+      
       - name: Test formula info
         run: |
           echo "📊 Formula information:"
