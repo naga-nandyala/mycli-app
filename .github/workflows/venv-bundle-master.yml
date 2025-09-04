@@ -1,0 +1,46 @@
+name: Venv Bundle Master - Complete Release Pipeline
+
+# Simple master workflow that triggers the 3 venv workflows sequentially:
+# 1. Build Bundle → 2. Update Formula → 3. Test Formula
+
+permissions:
+  contents: write
+  actions: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+      skip_tests:
+        description: 'Skip final testing'
+        type: boolean
+        default: false
+
+jobs:
+  build-bundle:
+    name: "🔨 Build Bundle"
+    uses: ./.github/workflows/venv-build-macos-bundle.yml
+    with:
+      version: ${{ github.event.inputs.version || github.ref_name }}
+      architecture: 'both'
+
+  update-formula:
+    name: "📝 Update Formula" 
+    needs: build-bundle
+    uses: ./.github/workflows/venv-update-homebrew-formula.yml
+    with:
+      version: ${{ github.event.inputs.version || github.ref_name }}
+
+  test-formula:
+    name: "🧪 Test Formula"
+    needs: update-formula
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
+    uses: ./.github/workflows/venv-test-homebrew-tap.yml
+    with:
+      test_version: ${{ github.event.inputs.version || github.ref_name }}
