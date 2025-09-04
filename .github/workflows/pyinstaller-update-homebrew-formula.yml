@@ -1,4 +1,4 @@
-name: Update Homebrew Formula
+name: (pyinstaller) Update Homebrew Formula
 
 # This workflow automatically updates the Homebrew formula in the homebrew-mycli-app repository
 # when a new release is published or when manually triggered.

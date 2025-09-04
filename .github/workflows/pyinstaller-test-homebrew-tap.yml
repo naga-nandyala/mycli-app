@@ -1,4 +1,4 @@
-name: Test Homebrew Tap
+name: (pyinstaller) Test Homebrew Tap
 
 on:
   # Test after releases (when binaries are updated)

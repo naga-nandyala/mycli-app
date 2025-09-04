@@ -6,7 +6,7 @@
 # - Code signs binaries to eliminate "not trusted" warnings on macOS
 # - Comprehensive dependency verification and testing
 
-name: build-release-binaries (Manual)
+name: (pyinstaller) build-release-binaries
 
 # Ensure GITHUB_TOKEN can create releases
 permissions:

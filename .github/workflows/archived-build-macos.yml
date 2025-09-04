@@ -1,4 +1,4 @@
-name: Build macOS Distributions (Manual Only)
+name: Build macOS Distributions (archive)
 
 on:
   workflow_dispatch:
