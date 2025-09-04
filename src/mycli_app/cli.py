@@ -8,6 +8,7 @@ import sys
 import os
 import json
 import base64
+import platform
 from pathlib import Path
 from colorama import init, Fore, Style
 
@@ -90,12 +91,25 @@ def save_auth_state():
 def clear_broker_cache():
     """Clear broker-specific cache."""
     try:
-        # Create app instance to access broker cache
-        app = msal.PublicClientApplication(
-            client_id="04b07795-8ddb-461a-bbee-02f9e1bf7b46",  # Azure CLI client ID
-            authority="https://login.microsoftonline.com/common",
-            enable_broker_on_windows=True,
-        )
+        # Create app instance to access broker cache based on platform
+        if os.name == "nt":  # Windows
+            app = msal.PublicClientApplication(
+                client_id="04b07795-8ddb-461a-bbee-02f9e1bf7b46",  # Azure CLI client ID
+                authority="https://login.microsoftonline.com/common",
+                enable_broker_on_windows=True,
+            )
+        elif platform.system() == "Darwin":  # macOS
+            app = msal.PublicClientApplication(
+                client_id="04b07795-8ddb-461a-bbee-02f9e1bf7b46",  # Azure CLI client ID
+                authority="https://login.microsoftonline.com/common",
+                enable_broker_on_mac=True,
+            )
+        else:
+            # For other platforms, create without broker support
+            app = msal.PublicClientApplication(
+                client_id="04b07795-8ddb-461a-bbee-02f9e1bf7b46",  # Azure CLI client ID
+                authority="https://login.microsoftonline.com/common",
+            )
 
         # Get all accounts and remove them
         accounts = app.get_accounts()
@@ -171,6 +185,113 @@ def get_native_broker_credential(tenant_id=None):
         return None, None
 
 
+def get_macos_broker_credential(tenant_id=None):
+    """Get a native broker credential for macOS using MSAL directly."""
+    try:
+        import msal
+
+        # Use MSAL directly for better broker control on macOS
+        tenant_id = tenant_id or "common"
+        authority = f"https://login.microsoftonline.com/{tenant_id}"
+
+        # Create a public client application with broker support for macOS
+        app = msal.PublicClientApplication(
+            client_id="04b07795-8ddb-461a-bbee-02f9e1bf7b46",  # Azure CLI client ID
+            authority=authority,
+            enable_broker_on_mac=True,  # Enable broker support on macOS
+        )
+
+        # First try to get accounts from cache
+        accounts = app.get_accounts()
+
+        if accounts:
+            click.echo(
+                f"{Fore.YELLOW}⚠️  Found {len(accounts)} cached account(s) - this might skip the popup{Style.RESET_ALL}"
+            )
+            # Try silent authentication first
+            result = app.acquire_token_silent(scopes=["https://management.azure.com/.default"], account=accounts[0])
+            if result and "access_token" in result:
+                click.echo(f"{Fore.YELLOW}✓ Used cached broker credentials - no popup needed{Style.RESET_ALL}")
+                return result, "broker_cached"
+
+        # Try interactive broker authentication for macOS
+        click.echo(f"{Fore.BLUE}🚨 Starting INTERACTIVE broker authentication - popup should appear{Style.RESET_ALL}")
+        click.echo(f"{Fore.BLUE}💡 Look for authentication prompt in macOS or Authenticator app{Style.RESET_ALL}")
+
+        # Try different approaches for macOS broker authentication
+        try:
+            # First try with console window handle
+            result = app.acquire_token_interactive(
+                scopes=["https://management.azure.com/.default"],
+                parent_window_handle=app.CONSOLE_WINDOW_HANDLE,  # Use console window handle for CLI apps
+                enable_broker=True,
+                prompt="select_account",  # Force account selection
+                login_hint=None,  # Don't hint any specific account
+            )
+        except Exception as console_error:
+            # If console window handle fails, try without it
+            click.echo(
+                f"{Fore.YELLOW}⚠️  Console window handle not supported, trying alternative method...{Style.RESET_ALL}"
+            )
+            try:
+                result = app.acquire_token_interactive(
+                    scopes=["https://management.azure.com/.default"],
+                    enable_broker=True,
+                    prompt="select_account",  # Force account selection
+                    login_hint=None,  # Don't hint any specific account
+                )
+            except Exception as broker_error:
+                # If broker fails, try without broker for this specific case
+                click.echo(
+                    f"{Fore.YELLOW}⚠️  Native broker failed, trying interactive without broker...{Style.RESET_ALL}"
+                )
+                result = app.acquire_token_interactive(
+                    scopes=["https://management.azure.com/.default"],
+                    prompt="select_account",  # Force account selection
+                    login_hint=None,  # Don't hint any specific account
+                )
+                # If this works, update the auth method to indicate it's not true broker
+                if result and "access_token" in result:
+                    click.echo(
+                        f"{Fore.YELLOW}✓ Interactive authentication completed (browser fallback){Style.RESET_ALL}"
+                    )
+                    return result, "browser_interactive"
+
+        if result and "access_token" in result:
+            click.echo(f"{Fore.GREEN}✓ Interactive broker authentication completed{Style.RESET_ALL}")
+            return result, "broker_interactive"
+        else:
+            error = result.get("error_description", "Unknown error")
+            click.echo(f"{Fore.RED}Broker authentication failed: {error}{Style.RESET_ALL}")
+            return None, None
+
+    except Exception as e:
+        error_msg = str(e)
+        if "msal[broker]" in error_msg:
+            click.echo(
+                f'{Fore.YELLOW}💡 For native broker support on macOS, install: pip install "msal[broker]>=1.20,<2"{Style.RESET_ALL}'
+            )
+        elif "Company Portal" in error_msg:
+            click.echo(
+                f"{Fore.YELLOW}💡 For full broker features, install Microsoft Company Portal from the App Store{Style.RESET_ALL}"
+            )
+        elif "parent_window_handle is required" in error_msg:
+            click.echo(f"{Fore.RED}Console window handle error: {error_msg}{Style.RESET_ALL}")
+            click.echo(
+                f"{Fore.YELLOW}💡 This is a known issue with MSAL broker on some macOS versions{Style.RESET_ALL}"
+            )
+            click.echo(f"{Fore.YELLOW}💡 Try using: mycli login --use-device-code{Style.RESET_ALL}")
+        elif "broker" in error_msg.lower():
+            click.echo(f"{Fore.RED}Broker authentication error: {error_msg}{Style.RESET_ALL}")
+            click.echo(
+                f"{Fore.YELLOW}💡 Ensure Microsoft Company Portal is installed from the App Store{Style.RESET_ALL}"
+            )
+            click.echo(f"{Fore.YELLOW}💡 Ensure Touch ID is enabled in System Preferences{Style.RESET_ALL}")
+        else:
+            click.echo(f"{Fore.RED}Native broker authentication error: {error_msg}{Style.RESET_ALL}")
+        return None, None
+
+
 def get_azure_credential(tenant_id=None, use_broker=False, use_device_code=False):
     """Get Azure credential for authentication."""
     if not AZURE_AVAILABLE:
@@ -186,9 +307,28 @@ def get_azure_credential(tenant_id=None, use_broker=False, use_device_code=False
             # Use broker-based authentication (Windows Hello, Authenticator app, etc.)
             auth_method = "broker"
 
-            # First try native MSAL broker authentication on Windows
-            if os.name == "nt":  # Windows only
+            # Try native MSAL broker authentication on Windows
+            if os.name == "nt":  # Windows
                 broker_result, broker_method = get_native_broker_credential(tenant_id)
+                if broker_result:
+                    # Create a custom credential wrapper for MSAL result
+                    from azure.core.credentials import AccessToken
+                    import time
+
+                    class MSALBrokerCredential:
+                        def __init__(self, msal_result):
+                            self.msal_result = msal_result
+
+                        def get_token(self, *scopes, **kwargs):
+                            expires_on = self.msal_result.get("expires_in", 3600)
+                            expires_on = int(time.time()) + expires_on
+                            return AccessToken(self.msal_result["access_token"], expires_on)
+
+                    return MSALBrokerCredential(broker_result), broker_method
+
+            # Try native MSAL broker authentication on macOS
+            elif platform.system() == "Darwin":  # macOS
+                broker_result, broker_method = get_macos_broker_credential(tenant_id)
                 if broker_result:
                     # Create a custom credential wrapper for MSAL result
                     from azure.core.credentials import AccessToken
@@ -213,9 +353,12 @@ def get_azure_credential(tenant_id=None, use_broker=False, use_device_code=False
                 return credential, "broker_cache"
             except ClientAuthenticationError:
                 # Fallback to interactive browser with broker support
-                credential = InteractiveBrowserCredential(
-                    tenant_id=tenant_id, enable_broker_on_windows=True  # This enables Windows broker support
-                )
+                if os.name == "nt":  # Windows
+                    credential = InteractiveBrowserCredential(tenant_id=tenant_id, enable_broker_on_windows=True)
+                elif platform.system() == "Darwin":  # macOS
+                    credential = InteractiveBrowserCredential(tenant_id=tenant_id, enable_broker_on_mac=True)
+                else:
+                    credential = InteractiveBrowserCredential(tenant_id=tenant_id)
                 auth_method = "browser_with_broker"
         elif tenant_id:
             # Use interactive browser credential with specific tenant
@@ -244,6 +387,8 @@ def get_broker_info():
     broker_info = {
         "windows_hello_available": False,
         "authenticator_app_available": False,
+        "keychain_available": False,
+        "touch_id_available": False,
         "platform_support": False,
         "recommendations": [],
     }
@@ -255,8 +400,16 @@ def get_broker_info():
         broker_info["recommendations"].append("Microsoft Authenticator app")
         broker_info["windows_hello_available"] = True  # Assume available on Windows
         broker_info["authenticator_app_available"] = True  # Assume available
+    elif platform.system() == "Darwin":  # macOS
+        broker_info["platform_support"] = True
+        broker_info["recommendations"].append("macOS Keychain")
+        broker_info["recommendations"].append("Touch ID / Face ID")
+        broker_info["recommendations"].append("Microsoft Authenticator app")
+        broker_info["keychain_available"] = True  # Assume available on macOS
+        broker_info["touch_id_available"] = True  # Assume available on modern Macs
+        broker_info["authenticator_app_available"] = True  # Assume available
     else:
-        broker_info["recommendations"].append("Use device code flow for non-Windows platforms")
+        broker_info["recommendations"].append("Use device code flow for other platforms")
 
     return broker_info
 
@@ -288,11 +441,17 @@ def authenticate_user_with_broker(tenant_id=None, use_device_code=False, force_b
             return False
 
         # Check if we got a fallback method when force_broker is specified
-        if force_broker and auth_method in ["browser_with_broker", "browser"]:
+        if force_broker and auth_method in ["browser_with_broker", "browser", "browser_interactive"]:
             click.echo(
                 f"{Fore.RED}❌ Force broker specified but only browser authentication is available{Style.RESET_ALL}"
             )
-            click.echo(f"{Fore.YELLOW}💡 Try setting up Windows Hello or Microsoft Authenticator{Style.RESET_ALL}")
+            if platform.system() == "Darwin":  # macOS
+                click.echo(
+                    f"{Fore.YELLOW}💡 Try setting up Touch ID/Face ID or Microsoft Authenticator{Style.RESET_ALL}"
+                )
+                click.echo(f"{Fore.YELLOW}💡 Install Microsoft Company Portal from the App Store{Style.RESET_ALL}")
+            else:
+                click.echo(f"{Fore.YELLOW}💡 Try setting up Windows Hello or Microsoft Authenticator{Style.RESET_ALL}")
             return False
 
         # Display authentication method info
@@ -300,12 +459,21 @@ def authenticate_user_with_broker(tenant_id=None, use_device_code=False, force_b
             click.echo(f"{Fore.BLUE}🔐 Authenticating with Azure using native broker...{Style.RESET_ALL}")
             if broker_info["windows_hello_available"]:
                 click.echo(f"{Fore.GREEN}✓ Windows Hello available{Style.RESET_ALL}")
+            if broker_info["keychain_available"]:
+                click.echo(f"{Fore.GREEN}✓ macOS Keychain available{Style.RESET_ALL}")
+            if broker_info["touch_id_available"]:
+                click.echo(f"{Fore.GREEN}✓ Touch ID/Face ID available{Style.RESET_ALL}")
             if broker_info["authenticator_app_available"]:
                 click.echo(f"{Fore.GREEN}✓ Microsoft Authenticator support available{Style.RESET_ALL}")
             if auth_method == "broker_cached":
                 click.echo(f"{Fore.GREEN}✓ Using cached broker credentials{Style.RESET_ALL}")
             else:
-                click.echo(f"{Fore.BLUE}💡 Look for authentication prompt in Windows Security{Style.RESET_ALL}")
+                if platform.system() == "Darwin":
+                    click.echo(
+                        f"{Fore.BLUE}💡 Look for authentication prompt in macOS or Authenticator app{Style.RESET_ALL}"
+                    )
+                else:
+                    click.echo(f"{Fore.BLUE}💡 Look for authentication prompt in Windows Security{Style.RESET_ALL}")
         elif auth_method == "broker_cache":
             click.echo(f"{Fore.BLUE}🔐 Authenticating with Azure using cached broker tokens...{Style.RESET_ALL}")
         elif auth_method == "browser_with_broker":
@@ -671,9 +839,17 @@ def login(tenant, use_device_code, use_broker, force_broker, demo):
             click.echo("    pip install azure-identity azure-mgmt-core azure-core msal")
         elif use_broker or force_broker:
             click.echo(f"{Fore.YELLOW}💡 Broker authentication tips:{Style.RESET_ALL}")
-            click.echo("    - Ensure Windows Hello is set up")
-            click.echo("    - Ensure Microsoft Authenticator is installed and configured")
-            click.echo("    - Try running as administrator if issues persist")
+            if os.name == "nt":  # Windows
+                click.echo("    - Ensure Windows Hello is set up")
+                click.echo("    - Ensure Microsoft Authenticator is installed and configured")
+                click.echo("    - Try running as administrator if issues persist")
+            elif platform.system() == "Darwin":  # macOS
+                click.echo("    - Ensure Touch ID is enabled in System Preferences")
+                click.echo("    - Install Microsoft Company Portal from the App Store")
+                click.echo("    - Ensure Microsoft Authenticator is installed and configured")
+                click.echo("    - Check keychain access permissions")
+            else:
+                click.echo("    - Consider using device code flow on this platform")
             click.echo("    - Use 'mycli broker' to check broker capabilities")
 
 
@@ -750,6 +926,17 @@ def broker():
         click.echo(f"  Status: {Fore.GREEN}Available{Style.RESET_ALL}")
         click.echo("  Benefits: Biometric authentication, PIN-based auth")
 
+    # macOS Keychain and Touch ID status
+    if broker_info.get("keychain_available"):
+        click.echo(f"\n{Fore.BLUE}macOS Keychain:{Style.RESET_ALL}")
+        click.echo(f"  Status: {Fore.GREEN}Available{Style.RESET_ALL}")
+        click.echo("  Benefits: Secure credential storage, seamless authentication")
+
+    if broker_info.get("touch_id_available"):
+        click.echo(f"\n{Fore.BLUE}Touch ID / Face ID:{Style.RESET_ALL}")
+        click.echo(f"  Status: {Fore.GREEN}Available{Style.RESET_ALL}")
+        click.echo("  Benefits: Biometric authentication, secure hardware-backed keys")
+
     # Microsoft Authenticator status
     if broker_info.get("authenticator_app_available"):
         click.echo(f"\n{Fore.BLUE}Microsoft Authenticator:{Style.RESET_ALL}")
@@ -763,13 +950,28 @@ def broker():
     click.echo("  • Use 'mycli login --use-device-code' for device code flow")
     click.echo("  • Use 'mycli login' for standard browser authentication")
 
+    # Platform-specific setup instructions
+    if platform.system() == "Darwin":  # macOS
+        click.echo(f"\n{Fore.BLUE}macOS Setup:{Style.RESET_ALL}")
+        click.echo("  • Install Microsoft Company Portal from the App Store for enhanced broker features")
+        click.echo("  • Ensure Touch ID is enabled in System Preferences > Touch ID & Password")
+        click.echo("  • Configure Microsoft Authenticator app if using multi-factor authentication")
+
     # Dependency information
     click.echo(f"\n{Fore.BLUE}Dependencies:{Style.RESET_ALL}")
-    click.echo(f'  For native broker support: {Fore.CYAN}pip install "msal[broker]>=1.20,<2"{Style.RESET_ALL}')
+    if platform.system() == "Darwin":  # macOS
+        click.echo(
+            f'  For native broker support on macOS: {Fore.CYAN}pip install "msal[broker]>=1.20,<2"{Style.RESET_ALL}'
+        )
+        click.echo("  Recommended: Microsoft Company Portal (App Store)")
+    else:
+        click.echo(f'  For native broker support: {Fore.CYAN}pip install "msal[broker]>=1.20,<2"{Style.RESET_ALL}')
     click.echo("  Without this, broker authentication falls back to browser")
 
     if not broker_info["platform_support"]:
-        click.echo(f"\n{Fore.YELLOW}Note: Broker authentication is optimized for Windows platforms.{Style.RESET_ALL}")
+        click.echo(
+            f"\n{Fore.YELLOW}Note: Broker authentication is optimized for Windows and macOS platforms.{Style.RESET_ALL}"
+        )
         click.echo(f"{Fore.YELLOW}Consider using device code flow on other platforms.{Style.RESET_ALL}")
 
     # Current authentication status
@@ -843,6 +1045,37 @@ def clear_cache(all):
                     except Exception as e:
                         click.echo(f"{Fore.YELLOW}Could not clear MSAL cache: {e}{Style.RESET_ALL}")
 
+        # Clear MSAL cache (macOS)
+        elif platform.system() == "Darwin":
+            msal_locations = [
+                Path.home() / ".cache" / "msal_http_cache",
+                Path.home() / "Library" / "Caches" / "Microsoft" / "MSAL",
+                Path.home() / "Library" / "Application Support" / "Microsoft" / "MSAL",
+                Path.home() / "Library" / "Preferences" / "com.microsoft.msal.cache",
+            ]
+
+            for cache_path in msal_locations:
+                if cache_path.exists():
+                    try:
+                        if cache_path.is_file():
+                            cache_path.unlink()
+                        else:
+                            shutil.rmtree(str(cache_path))
+                        click.echo(f"{Fore.GREEN}✓ Cleared MSAL cache (macOS){Style.RESET_ALL}")
+                        cleared_count += 1
+                    except Exception as e:
+                        click.echo(f"{Fore.YELLOW}Could not clear MSAL cache: {e}{Style.RESET_ALL}")
+
+            # Clear macOS Keychain MSAL entries (if accessible)
+            try:
+                # Note: This is a placeholder - actual keychain clearing would require
+                # more specific implementation or user interaction
+                click.echo(
+                    f"{Fore.BLUE}💡 Tip: To clear keychain entries, run: security delete-generic-password -s 'Microsoft MSAL'{Style.RESET_ALL}"
+                )
+            except Exception:
+                pass
+
         # Clear Azure CLI tokens
         azure_config = Path.home() / ".azure"
         if azure_config.exists():
@@ -869,7 +1102,14 @@ def clear_cache(all):
     if all:
         click.echo(f"\n{Fore.BLUE}💡 Additional cleanup recommendations:{Style.RESET_ALL}")
         click.echo("  • Clear browser cache for login.microsoftonline.com")
-        click.echo("  • Sign out from Windows Hello/Authenticator if needed")
+
+        if os.name == "nt":  # Windows
+            click.echo("  • Sign out from Windows Hello/Authenticator if needed")
+        elif platform.system() == "Darwin":  # macOS
+            click.echo("  • Sign out from Touch ID/Face ID authentication if needed")
+            click.echo("  • Clear keychain entries: security delete-generic-password -s 'Microsoft MSAL'")
+            click.echo("  • Sign out from Microsoft Authenticator app if needed")
+
         click.echo("  • Restart your terminal")
 
 
@@ -906,7 +1146,7 @@ def status():
 
     if not broker_info["platform_support"]:
         click.echo(
-            f"\n{Fore.YELLOW}💡 For enhanced security, use broker authentication on Windows platforms{Style.RESET_ALL}"
+            f"\n{Fore.YELLOW}💡 For enhanced security, use broker authentication on Windows or macOS platforms{Style.RESET_ALL}"
         )
 
 
