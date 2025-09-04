@@ -165,23 +165,16 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
-# Debug info
-echo "Debug: Original script: ${BASH_SOURCE[0]}" >&2
-echo "Debug: Resolved script path: $SCRIPT_PATH" >&2
-echo "Debug: Script dir: $SCRIPT_DIR" >&2
-
 # Look for Python interpreter - handle both direct use and Homebrew installation
 BUNDLE_PYTHON=""
 
 # Method 1: Same directory (direct bundle use)
 if [ -f "$SCRIPT_DIR/python" ]; then
     BUNDLE_PYTHON="$SCRIPT_DIR/python"
-    echo "Debug: Found Python via Method 1 (direct): $BUNDLE_PYTHON" >&2
 
 # Method 2: Check if we're in a Homebrew-style installation
 elif [ -f "$SCRIPT_DIR/../bin/python" ]; then
     BUNDLE_PYTHON="$SCRIPT_DIR/../bin/python"
-    echo "Debug: Found Python via Method 2 (relative): $BUNDLE_PYTHON" >&2
 
 # Method 3: Look for bundle structure patterns
 else
@@ -194,7 +187,6 @@ else
         
         if [ -f "$python_path" ]; then
             BUNDLE_PYTHON="$python_path"
-            echo "Debug: Found Python via Method 3 (search): $BUNDLE_PYTHON" >&2
             break
         fi
     done
