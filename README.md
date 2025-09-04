@@ -11,9 +11,12 @@ A professional CLI application inspired by Azure CLI with comprehensive Azure au
 ### 🔐 Advanced Authentication
 
 - **Interactive Browser Authentication**: Default secure authentication flow
-- **Broker Authentication**: Native Windows Hello and Microsoft Authenticator support
+- **Windows Broker Authentication**: Native Windows Hello and Microsoft Authenticator support
+- **macOS Broker Authentication**: Touch ID, Face ID, and Keychain integration with Microsoft Company Portal
+- **Native MSAL Broker**: Direct MSAL broker integration with enhanced popup control
 - **Device Code Flow**: Perfect for headless systems and remote servers
 - **Azure CLI Integration**: Seamless integration with existing Azure CLI credentials
+- **Intelligent Fallback**: Automatic fallback from broker to browser authentication
 - **Token Caching**: Persistent authentication with secure token storage
 
 ### 📊 Resource Management
@@ -68,7 +71,7 @@ pip install mycli-app-naga
 # With Azure SDK support
 pip install mycli-app-naga[azure]
 
-# With full broker authentication support (Windows)
+# With full broker authentication support (Windows/macOS)
 pip install mycli-app-naga[broker]
 
 # Development installation with all extras
@@ -169,6 +172,47 @@ mycli status
 mycli --help
 ```
 
+### macOS Broker Authentication
+
+The CLI now provides enhanced native broker authentication support for macOS with the following features:
+
+#### Features
+
+- **Touch ID Integration**: Use Touch ID for secure authentication
+- **Face ID Support**: Face ID authentication on supported Macs
+- **Keychain Integration**: Secure credential storage in macOS Keychain
+- **Company Portal Integration**: Enhanced enterprise features via Microsoft Company Portal
+- **Fallback Handling**: Intelligent fallback to browser authentication when needed
+
+#### Setup Requirements
+
+```bash
+# Install MSAL with broker support
+pip install "msal[broker]>=1.20,<2"
+
+# Install Microsoft Company Portal (recommended)
+# Download from Mac App Store: Microsoft Company Portal
+
+# Enable Touch ID/Face ID
+# System Preferences > Touch ID & Password
+```
+
+#### Usage Examples
+
+```bash
+# Use broker authentication with fallback
+mycli login --use-broker
+
+# Force native broker only (fail if not available)
+mycli login --force-broker
+
+# Check broker capabilities
+mycli broker
+
+# Clear broker cache if needed
+mycli clear-cache --all
+```
+
 ### Authentication
 
 ```bash
@@ -178,8 +222,11 @@ mycli login
 # Login with specific tenant
 mycli login --tenant your-tenant-id
 
-# Login with Windows Hello/Authenticator (Windows)
+# Login with Windows Hello/Authenticator (Windows) or Touch ID/Keychain (macOS)
 mycli login --use-broker
+
+# Force native broker authentication only (no browser fallback)
+mycli login --force-broker
 
 # Login with device code (headless systems)
 mycli login --use-device-code
@@ -237,7 +284,9 @@ mycli config show --key default_location
 | Method | Use Case | Platform | Security | Setup |
 |--------|----------|----------|----------|-------|
 | Browser | Default, interactive use | All | High | None |
-| Broker | Enterprise, SSO | Windows | Highest | Windows Hello/Authenticator |
+| Broker (Windows) | Enterprise, SSO | Windows | Highest | Windows Hello/Authenticator |
+| Broker (macOS) | Touch ID, Keychain | macOS | Highest | Touch ID/Company Portal |
+| Force Broker | Native-only authentication | Windows/macOS | Highest | Complete broker setup |
 | Device Code | Headless, remote servers | All | High | None |
 | Azure CLI | Development, existing setup | All | High | Azure CLI required |
 
@@ -472,7 +521,7 @@ azure-mgmt-core>=1.3.0    # Azure management SDK
 azure-core>=1.24.0        # Azure core library
 msal>=1.20.0              # Microsoft Authentication Library
 
-# Broker Authentication (Windows)
+# Broker Authentication (Windows/macOS)
 msal[broker]>=1.20.0,<2   # MSAL with broker support
 ```
 
@@ -485,6 +534,8 @@ msal[broker]>=1.20.0,<2   # MSAL with broker support
 
 #### macOS Platforms
 
+- **Broker Authentication**: Touch ID, Face ID, Keychain integration
+- **Company Portal**: Microsoft Company Portal app (App Store) for enhanced broker features
 - **Code Signing**: Xcode Command Line Tools
 - **Homebrew**: For package management
 - **Universal Binary**: Supports both Intel and Apple Silicon
@@ -523,11 +574,20 @@ python -c "import azure.identity; print('Azure SDK OK')"
 # Check broker capabilities
 mycli broker
 
-# Install broker support
+# Install broker support (Windows/macOS)
 pip install "msal[broker]>=1.20,<2"
 
 # Try force broker authentication
 mycli login --force-broker
+
+# macOS specific: Install Company Portal
+# Download from Mac App Store: Microsoft Company Portal
+
+# macOS specific: Enable Touch ID
+# System Preferences > Touch ID & Password
+
+# Check keychain access (macOS)
+security find-generic-password -s "Microsoft MSAL"
 ```
 
 #### Installation Issues
@@ -557,6 +617,12 @@ codesign --verify --verbose mycli
 
 # Allow unsigned binary (if needed)
 xattr -d com.apple.quarantine mycli
+
+# Check for broker authentication support
+mycli broker
+
+# If broker issues, try alternative methods
+mycli login --use-device-code
 
 # Download from official releases
 # Use Homebrew installation instead
