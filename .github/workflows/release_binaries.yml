@@ -243,70 +243,26 @@ jobs:
           echo "=== Binary contents check ==="
           echo "Checking dist directory structure:"
           ls -la dist/
-          if [ -d dist/mycli ]; then
-            echo "Found dist/mycli directory (COLLECT build)"
-            ls -la dist/mycli/
-            
-            # Check for base_library.zip in the newer location (_internal)
-            if [ -f dist/mycli/_internal/base_library.zip ]; then
-              echo "Checking _internal/base_library.zip for all Azure/MSAL modules:"
-              echo "--- Azure modules ---"
-              zipinfo dist/mycli/_internal/base_library.zip | grep -i azure | head -15 || echo "No azure entries found"
-              echo "--- MSAL modules ---" 
-              zipinfo dist/mycli/_internal/base_library.zip | grep -i msal | head -10 || echo "No msal entries found"
-              echo "--- PyMSALRuntime modules ---"
-              zipinfo dist/mycli/_internal/base_library.zip | grep -i pymsalruntime || echo "No pymsalruntime entries found"
-              echo "--- Cryptography modules ---"
-              zipinfo dist/mycli/_internal/base_library.zip | grep -i cryptography | head -5 || echo "No cryptography entries found"
-              echo "--- Total module count ---"
-              zipinfo dist/mycli/_internal/base_library.zip | grep "\.pyc$" | wc -l
-            elif [ -f dist/mycli/base_library.zip ]; then
-              echo "Checking base_library.zip for all Azure/MSAL modules (legacy location):"
-              echo "--- Azure modules ---"
-              zipinfo dist/mycli/base_library.zip | grep -i azure | head -15 || echo "No azure entries found"
-              echo "--- MSAL modules ---" 
-              zipinfo dist/mycli/base_library.zip | grep -i msal | head -10 || echo "No msal entries found"
-              echo "--- PyMSALRuntime modules ---"
-              zipinfo dist/mycli/base_library.zip | grep -i pymsalruntime || echo "No pymsalruntime entries found"
-              echo "--- Cryptography modules ---"
-              zipinfo dist/mycli/base_library.zip | grep -i cryptography | head -5 || echo "No cryptography entries found"
-              echo "--- Total module count ---"
-              zipinfo dist/mycli/base_library.zip | grep "\.pyc$" | wc -l
-            else
-              echo "base_library.zip not found in expected locations"
-              echo "Contents of _internal directory:"
-              ls -la dist/mycli/_internal/ || echo "_internal directory not found"
-            fi
-            
-            # Show _internal directory contents for debugging
-            echo ""
-            echo "=== _internal directory analysis ==="
-            if [ -d dist/mycli/_internal ]; then
-              echo "Contents of _internal:"
-              ls -la dist/mycli/_internal/
-              echo "Python library files:"
-              ls -la dist/mycli/_internal/ | grep -E "\.(so|dylib|pyd)$" || echo "No shared library files found"
-            fi
-            
-          elif [ -f dist/mycli ]; then
-            echo "Found dist/mycli file (onefile build)"
+          if [ -f dist/mycli ]; then
+            echo "Found dist/mycli onefile binary"
             echo "File size: $(ls -lh dist/mycli | awk '{print $5}')"
+            echo "File type: $(file dist/mycli)"
+            echo ""
+            echo "✓ Onefile build successful - all dependencies are embedded"
           else
-            echo "Neither dist/mycli directory nor file found"
+            echo "❌ Expected onefile binary not found"
             echo "Available files in dist/:"
             ls -la dist/ || echo "dist/ directory not found"
+            exit 1
           fi
 
       - name: Test binary functionality
         run: |
           echo "=== Testing Built Binary ==="
-          # Find the binary location
+          # Find the binary location (should be onefile now)
           if [ -f dist/mycli ]; then
             BINARY_PATH="dist/mycli"
             echo "Found onefile binary: $BINARY_PATH"
-          elif [ -f dist/mycli/mycli ]; then
-            BINARY_PATH="dist/mycli/mycli"
-            echo "Found COLLECT binary: $BINARY_PATH"
           else
             echo "❌ Could not locate built binary" >&2
             ls -la dist/ || echo "dist/ directory not found"
@@ -362,27 +318,6 @@ jobs:
             # Verify the signature
             codesign --verify --verbose dist/mycli && echo "✓ Signature verified" || echo "❌ Signature verification failed"
             
-          elif [ -d dist/mycli ]; then
-            echo "Signing COLLECT directory binary: dist/mycli/mycli"
-            
-            # First, sign the main executable
-            if [ -f dist/mycli/mycli ]; then
-              codesign --force --deep --sign - dist/mycli/mycli
-              echo "✓ Signed main executable: dist/mycli/mycli"
-              
-              # Verify the main executable signature
-              codesign --verify --verbose dist/mycli/mycli && echo "✓ Main executable signature verified" || echo "❌ Main executable signature verification failed"
-            fi
-            
-            # Sign any shared libraries (.dylib, .so files) in _internal directory
-            if [ -d dist/mycli/_internal ]; then
-              echo "Signing shared libraries in _internal directory..."
-              find dist/mycli/_internal -name "*.dylib" -o -name "*.so" | while read lib; do
-                echo "  Signing: $lib"
-                codesign --force --sign - "$lib" 2>/dev/null || echo "  Warning: Could not sign $lib"
-              done
-            fi
-            
           else
             echo "❌ No binary found to sign"
             exit 1
@@ -405,20 +340,12 @@ jobs:
           echo "=== Packaging Binary ==="
           TAR_NAME="mycli-${VERSION}-macos-${ARCH}.tar.gz"
           
-          # Handle both onefile and onedir (COLLECT) builds
+          # Handle onefile build (should be just dist/mycli)
           if [ -f dist/mycli ]; then
             echo "Found onefile binary: dist/mycli"
             cp dist/mycli mycli
             chmod +x mycli
             tar -czf "$TAR_NAME" mycli
-          elif [ -d dist/mycli ]; then
-            echo "Found COLLECT directory: dist/mycli"
-            echo "Contents of dist/mycli:"
-            ls -la dist/mycli/
-            # For COLLECT builds, package the entire directory but rename the top level
-            cd dist
-            tar -czf "../$TAR_NAME" mycli/
-            cd ..
           else
             echo "Could not locate built binary" >&2
             ls -la dist/ || echo "dist/ directory not found"
@@ -443,22 +370,11 @@ jobs:
           
           echo "Testing extracted binary..."
           
-          # Handle both onefile and COLLECT directory structures
+          # Handle onefile binary structure
           if [ -f mycli ]; then
             echo "Found onefile binary: mycli"
             chmod +x mycli
             BINARY_PATH="./mycli"
-            
-            # Verify code signature
-            echo "=== Code Signature Verification ==="
-            codesign --verify --verbose "$BINARY_PATH" && echo "✓ Code signature valid" || echo "❌ Code signature invalid"
-            
-          elif [ -d mycli ]; then
-            echo "Found COLLECT directory: mycli"
-            echo "Contents of mycli directory:"
-            ls -la mycli/
-            chmod +x mycli/mycli
-            BINARY_PATH="./mycli/mycli"
             
             # Verify code signature
             echo "=== Code Signature Verification ==="
@@ -537,35 +453,12 @@ jobs:
           # Extract and test
           tar -xzf "$FIRST_TARBALL"
           
-          # Handle both onefile and COLLECT directory structures
+          # Handle onefile binary structure
           if [ -f mycli ]; then
             echo "Found onefile binary: mycli"
             chmod +x mycli
             BINARY_PATH="./mycli"
             echo "✓ Onefile structure validated"
-          elif [ -d mycli ]; then
-            echo "Found COLLECT directory: mycli"
-            echo "Contents of mycli directory:"
-            ls -la mycli/
-            chmod +x mycli/mycli
-            BINARY_PATH="./mycli/mycli"
-            
-            # Validate COLLECT structure
-            if [ -f mycli/mycli ]; then
-              echo "✓ Main executable found"
-            else
-              echo "❌ Main executable missing"
-              exit 1
-            fi
-            
-            if [ -d mycli/_internal ]; then
-              echo "✓ Dependencies directory found"
-              echo "Dependencies count: $(ls mycli/_internal | wc -l)"
-            else
-              echo "⚠️  No _internal directory (might be onefile in directory)"
-            fi
-            
-            echo "✓ COLLECT structure validated"
           else
             echo "❌ Could not locate extracted binary"
             ls -la .
@@ -584,8 +477,8 @@ jobs:
           BINARY_SIZE=$(stat -f%z "$BINARY_PATH")
           echo "Binary size: $BINARY_SIZE bytes ($(($BINARY_SIZE / 1024 / 1024))MB)"
           
-          if [ "$BINARY_SIZE" -gt 5000000 ]; then
-            echo "✓ Binary size looks reasonable (>5MB, likely includes Azure deps)"
+          if [ "$BINARY_SIZE" -gt 50000000 ]; then
+            echo "✓ Binary size looks reasonable (>50MB, includes all dependencies)"
           else
             echo "⚠️  Binary size seems small, might be missing dependencies"
           fi
