@@ -147,7 +147,39 @@ def create_macos_launcher(bundle_path, bin_dir):
     # Check if pip created a console script during installation
     pip_generated_script = bin_dir / "mycli"
     if pip_generated_script.exists():
-        print("Found pip-generated console script, using that")
+        print("Found pip-generated console script, creating portable version...")
+        
+        # Instead of fixing the pip script, create our own portable version
+        # This avoids hardcoded paths entirely
+        portable_script_content = """#!/bin/bash
+# MyCLI Portable Console Script
+# Auto-generated to replace pip's hardcoded-path version
+
+# Get the directory containing this script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUNDLE_PYTHON="$SCRIPT_DIR/python"
+
+# Check if bundle python exists
+if [ ! -f "$BUNDLE_PYTHON" ]; then
+    echo "Error: Bundle Python interpreter not found at $BUNDLE_PYTHON" >&2
+    exit 1
+fi
+
+# Execute the main CLI function
+exec "$BUNDLE_PYTHON" -c "
+import sys
+from mycli_app.cli import main
+if __name__ == '__main__':
+    sys.exit(main())
+" "$@"
+"""
+        
+        # Write the portable script
+        with open(pip_generated_script, 'w') as f:
+            f.write(portable_script_content)
+        
+        print("  Created portable console script")
+        
         # Make sure it's executable
         os.chmod(pip_generated_script, 0o755)
 
@@ -157,7 +189,7 @@ def create_macos_launcher(bundle_path, bin_dir):
             homebrew_launcher.unlink()
         homebrew_launcher.symlink_to("mycli")
 
-        print("Console script setup complete")
+        print("Console script setup complete with portable wrapper")
         return
 
     print("No pip-generated console script found, creating custom launcher...")
