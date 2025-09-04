@@ -179,6 +179,33 @@ jobs:
           # Test if we can import key modules (this tests the venv bundle integrity)
           mycli --version > /dev/null && echo "✅ Core application modules working"
           
+          # Test Azure SDK availability by checking the status command
+          echo "🔍 Checking Azure SDK availability:"
+          status_output=$(mycli status 2>&1)
+          echo "Status output: $status_output"
+          
+          if echo "$status_output" | grep -q "Azure SDK: Available"; then
+            echo "✅ Azure SDK is available in the bundle"
+          elif echo "$status_output" | grep -q "Azure SDK: Not Available"; then
+            echo "❌ Azure SDK is NOT available in the bundle"
+            echo "This indicates that Azure packages were not properly included during bundling"
+            exit 1
+          else
+            echo "⚠️  Could not determine Azure SDK status from output"
+            echo "Full status output: $status_output"
+          fi
+          
+          # Test if we can check broker capabilities (this requires Azure packages)
+          echo "🔐 Testing broker command availability:"
+          broker_output=$(mycli broker 2>&1)
+          if echo "$broker_output" | grep -q "Platform Support"; then
+            echo "✅ Broker command works (Azure packages available)"
+          else
+            echo "❌ Broker command failed - Azure packages may be missing"
+            echo "Broker output: $broker_output"
+            exit 1
+          fi
+          
           echo "📊 Bundle size information:"
           if [[ -f "$(which mycli)" ]]; then
             bundle_dir=$(dirname "$(readlink -f "$(which mycli)" 2>/dev/null || which mycli)")

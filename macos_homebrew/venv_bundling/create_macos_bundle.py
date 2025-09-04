@@ -148,7 +148,7 @@ def create_macos_launcher(bundle_path, bin_dir):
     pip_generated_script = bin_dir / "mycli"
     if pip_generated_script.exists():
         print("Found pip-generated console script, creating portable version...")
-        
+
         # Instead of fixing the pip script, create our own portable version
         # This avoids hardcoded paths entirely
         portable_script_content = """#!/bin/bash
@@ -215,13 +215,13 @@ if __name__ == '__main__':
     sys.exit(main())
 " "$@"
 """
-        
+
         # Write the portable script
-        with open(pip_generated_script, 'w') as f:
+        with open(pip_generated_script, "w") as f:
             f.write(portable_script_content)
-        
+
         print("  Created portable console script")
-        
+
         # Make sure it's executable
         os.chmod(pip_generated_script, 0o755)
 
@@ -412,15 +412,59 @@ def verify_bundle_functionality(bundle_path):
 
     # Find the mycli executable
     mycli_path = bundle_path / "bin" / "mycli"
+    python_path = bundle_path / "bin" / "python"
 
     if not mycli_path.exists():
         raise Exception(f"mycli executable not found at {mycli_path}")
+
+    if not python_path.exists():
+        raise Exception(f"Python executable not found at {python_path}")
 
     # Make sure it's executable
     import stat
 
     current_mode = mycli_path.stat().st_mode
     mycli_path.chmod(current_mode | stat.S_IEXEC)
+
+    # Test Azure dependencies are available
+    print("  Testing Azure dependencies...")
+    try:
+        azure_check_script = """
+import sys
+try:
+    import azure.identity
+    import azure.core
+    import azure.mgmt.core
+    import msal
+    print("AZURE_AVAILABLE=True")
+    print(f"azure-identity: {azure.identity.__version__}")
+    print(f"azure-core: {azure.core.__version__}")
+    print(f"msal: {msal.__version__}")
+except ImportError as e:
+    print("AZURE_AVAILABLE=False")
+    print(f"Missing: {e}")
+    sys.exit(1)
+"""
+        result = subprocess.run(
+            [str(python_path), "-c", azure_check_script], capture_output=True, text=True, timeout=30, check=True
+        )
+
+        azure_output = result.stdout.strip()
+        print("  ✅ Azure dependencies check:")
+        for line in azure_output.split("\n"):
+            print(f"    {line}")
+
+        if "AZURE_AVAILABLE=False" in azure_output:
+            raise Exception("Azure dependencies are missing from the bundle")
+
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ Azure dependencies check failed with exit code {e.returncode}")
+        print(f"  ❌ stdout: {e.stdout}")
+        print(f"  ❌ stderr: {e.stderr}")
+        raise Exception(f"Azure dependencies check failed: {e}")
+    except subprocess.TimeoutExpired:
+        print("  ❌ Azure dependencies check timed out")
+        raise Exception("Azure dependencies check timed out")
 
     # Test version command
     print("  Testing version command...")
@@ -432,7 +476,7 @@ def verify_bundle_functionality(bundle_path):
 
         # Verify the output contains expected content
         if "MyCliApp version" not in version_output:
-            print(f"  ⚠️  Warning: Version output doesn't contain 'MyCliApp version'")
+            print("  ⚠️  Warning: Version output doesn't contain 'MyCliApp version'")
             print(f"  ⚠️  Actual output: '{version_output}'")
             # Don't fail here, just warn
 
@@ -442,7 +486,7 @@ def verify_bundle_functionality(bundle_path):
         print(f"  ❌ stderr: {e.stderr}")
         raise Exception(f"Version command failed: {e}")
     except subprocess.TimeoutExpired:
-        print(f"  ❌ Version command timed out")
+        print("  ❌ Version command timed out")
         raise Exception("Version command timed out")
 
     # Test help command
@@ -459,8 +503,36 @@ def verify_bundle_functionality(bundle_path):
         print(f"  ❌ stderr: {e.stderr}")
         raise Exception(f"Help command failed: {e}")
     except subprocess.TimeoutExpired:
-        print(f"  ❌ Help command timed out")
+        print("  ❌ Help command timed out")
         raise Exception("Help command timed out")
+
+    # Test Azure authentication availability check
+    print("  Testing Azure authentication availability...")
+    try:
+        result = subprocess.run([str(mycli_path), "status"], capture_output=True, text=True, timeout=30, check=True)
+
+        status_output = result.stdout.strip()
+        print("  ✅ Status command succeeded")
+
+        # Check if Azure SDK is reported as available
+        if "Azure SDK: Available" in status_output:
+            print("  ✅ Azure SDK reported as available in status")
+        elif "Azure SDK: Not Available" in status_output:
+            print("  ❌ Azure SDK reported as NOT available in status")
+            print(f"  ❌ Status output: {status_output}")
+            raise Exception("Azure SDK not detected by application status command")
+        else:
+            print("  ⚠️  Could not determine Azure SDK status from output")
+            print(f"  ⚠️  Status output: {status_output}")
+
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ Status command failed with exit code {e.returncode}")
+        print(f"  ❌ stdout: {e.stdout}")
+        print(f"  ❌ stderr: {e.stderr}")
+        raise Exception(f"Status command failed: {e}")
+    except subprocess.TimeoutExpired:
+        print("  ❌ Status command timed out")
+        raise Exception("Status command timed out")
 
     print("  ✅ Bundle verification completed successfully!")
 

@@ -419,6 +419,7 @@ def authenticate_user_with_broker(tenant_id=None, use_device_code=False, force_b
     if not AZURE_AVAILABLE:
         click.echo(f"{Fore.RED}Azure SDK not available. Install required packages:{Style.RESET_ALL}")
         click.echo("pip install azure-identity azure-mgmt-core azure-core msal")
+        click.echo(f"{Fore.RED}❌ Authentication failed{Style.RESET_ALL}")
         return False
 
     try:
@@ -536,6 +537,7 @@ def authenticate_user(tenant_id=None, use_broker=False, use_device_code=False, f
     if not AZURE_AVAILABLE:
         click.echo(f"{Fore.RED}Azure SDK not available. Install required packages:{Style.RESET_ALL}")
         click.echo("pip install azure-identity azure-mgmt-core azure-core msal")
+        click.echo(f"{Fore.RED}❌ Authentication failed{Style.RESET_ALL}")
         return False
 
     try:
@@ -804,7 +806,7 @@ def login(tenant, use_device_code, use_broker, force_broker, demo):
                 click.echo(
                     f"{Fore.RED}❌ Force broker specified but platform doesn't support native broker authentication{Style.RESET_ALL}"
                 )
-                return
+                sys.exit(1)
 
     if use_device_code:
         click.echo(f"{Fore.BLUE}  Method: {Fore.CYAN}Device Code Flow{Style.RESET_ALL}")
@@ -851,6 +853,9 @@ def login(tenant, use_device_code, use_broker, force_broker, demo):
             else:
                 click.echo("    - Consider using device code flow on this platform")
             click.echo("    - Use 'mycli broker' to check broker capabilities")
+
+        # Exit with error code when authentication fails
+        sys.exit(1)
 
 
 @cli.command()

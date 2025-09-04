@@ -114,6 +114,65 @@ if ! "$BUNDLE_DIR/bin/python" -c "from mycli_app.cli import main; print('Import 
 fi
 echo "✅ Module import works"
 
+# Test Azure dependencies are available
+echo "🔍 Testing Azure dependencies..."
+
+# Get the project root directory (two levels up from macos_homebrew/venv_bundling)
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TEST_SCRIPT="$PROJECT_ROOT/test_azure_packages.py"
+
+if [[ -f "$TEST_SCRIPT" ]] && "$BUNDLE_DIR/bin/python" "$TEST_SCRIPT" 2>&1; then
+    echo "✅ Azure dependencies test passed using dedicated test script"
+else
+    echo "⚠️  Azure dependencies test script not found or failed, using fallback method..."
+    
+    # Fallback to manual check
+    echo "🔍 Fallback: Manual Azure dependency check..."
+    AZURE_CHECK_OUTPUT=$("$BUNDLE_DIR/bin/python" -c "
+try:
+    import azure.identity
+    import azure.core
+    import azure.mgmt.core
+    import msal
+    print('✅ All Azure packages available')
+    print(f'azure-identity: {azure.identity.__version__}')
+    print(f'azure-core: {azure.core.__version__}')
+    print(f'msal: {msal.__version__}')
+except ImportError as e:
+    print(f'❌ Missing Azure package: {e}')
+    exit(1)
+" 2>&1)
+
+    if [[ $? -ne 0 ]]; then
+        echo "❌ Azure dependencies check failed"
+        echo "$AZURE_CHECK_OUTPUT"
+        exit 1
+    fi
+    echo "$AZURE_CHECK_OUTPUT"
+fi
+
+# Test status command to verify Azure SDK detection
+echo "🔐 Testing Azure SDK detection via status command..."
+STATUS_OUTPUT=$("$BUNDLE_DIR/bin/mycli" status 2>&1)
+if echo "$STATUS_OUTPUT" | grep -q "Azure SDK: Available"; then
+    echo "✅ Azure SDK correctly detected as available"
+elif echo "$STATUS_OUTPUT" | grep -q "Azure SDK: Not Available"; then
+    echo "❌ Azure SDK detected as NOT available"
+    echo "Status output: $STATUS_OUTPUT"
+    exit 1
+else
+    echo "⚠️  Could not determine Azure SDK status"
+    echo "Status output: $STATUS_OUTPUT"
+fi
+
+# Test broker command (requires Azure packages)
+echo "🛡️  Testing broker command..."
+if ! "$BUNDLE_DIR/bin/mycli" broker > /dev/null 2>&1; then
+    echo "❌ Broker command failed"
+    exit 1
+fi
+echo "✅ Broker command works"
+
 # Test bundle size
 echo "📊 Bundle size information..."
 BUNDLE_SIZE=$(du -sh "$BUNDLE_DIR" | cut -f1)
