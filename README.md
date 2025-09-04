@@ -18,15 +18,7 @@ A simple CLI application similar to Azure CLI with Azure authentication capabili
 ### macOS via Homebrew (Recommended)
 
 ```bash
-# Method 1: Create temporary tap (easiest)
-brew tap naga-nandyala/mycli-app https://github.com/naga-nandyala/mycli-app
-brew install mycli-app
-
-# Method 2: Manual download and install
-curl -L -o /tmp/mycli-app.rb https://raw.githubusercontent.com/naga-nandyala/mycli-app/main/Formula/mycli-app.rb
-# Create temporary tap structure
-mkdir -p $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula
-cp /tmp/mycli-app.rb $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula/
+# Install using our Homebrew tap
 brew install naga-nandyala/mycli-app/mycli-app
 
 # Verify installation
@@ -34,16 +26,28 @@ mycli --version
 ```
 
 ### From PyPI (when published)
+
 ```bash
 pip install mycli-app-naga
 ```
 
 ### From Source
+
 ```bash
 git clone https://github.com/naga-nandyala/mycli-app.git
 cd mycli-app
 pip install -e .
 ```
+
+### Binary Releases
+
+Pre-built binaries are available for download from [GitHub Releases](https://github.com/naga-nandyala/mycli-app/releases):
+
+- **Windows**: `mycli-app-windows-x64.zip`
+- **macOS (Intel)**: `mycli-app-darwin-x64.zip`  
+- **macOS (Apple Silicon)**: `mycli-app-darwin-arm64.zip`
+
+Each binary includes an embedded Python runtime and all dependencies.
 
 ## Quick Start
 
@@ -71,68 +75,16 @@ mycli --help
 - **Broker Authentication**: Windows Hello, Microsoft Authenticator
 - **Azure CLI Integration**: Uses existing Azure CLI credentials
 
-## Distribution Packages
-
-MyCliApp is available in multiple distribution formats for different platforms:
-
-### Windows
-- **Standalone ZIP**: `MyCliApp-{version}-windows-x64.zip`
-- **Windows Installer**: `MyCliApp-{version}-windows-x64.exe` *(coming soon)*
-
-### macOS
-- **Standalone ZIP**: `MyCliApp-{version}-darwin-x64.zip`
-- **App Bundle**: `MyCliApp.app` (native macOS application)
-- **DMG Installer**: `MyCliApp-{version}-darwin-x64.dmg`
-
-### Linux
-- **Standalone ZIP**: `MyCliApp-{version}-linux-x64.zip`
-
-All standalone ZIP packages include:
-- Embedded Python runtime (no system Python required)
-- All dependencies included
-- Cross-platform launcher scripts
-
-### Quick Installation
-
-**Windows:**
-```powershell
-# Download and extract ZIP
-Expand-Archive MyCliApp-1.0.0-windows-x64.zip
-cd MyCliApp-1.0.0-windows-x64
-.\bin\mycli.cmd --version
-```
-
-**macOS:**
-```bash
-# From ZIP
-unzip MyCliApp-1.0.0-darwin-x64.zip
-cd MyCliApp-1.0.0-darwin-x64
-chmod +x bin/mycli.sh
-./bin/mycli.sh --version
-
-# From App Bundle
-cp -R MyCliApp.app /Applications/
-/Applications/MyCliApp.app/Contents/MacOS/MyCliApp --version
-
-# From DMG - just double-click and drag to Applications
-```
-
-**Linux:**
-```bash
-unzip MyCliApp-1.0.0-linux-x64.zip
-cd MyCliApp-1.0.0-linux-x64
-chmod +x bin/mycli.sh
-./bin/mycli.sh --version
-```
-
 ## Building Distributions
 
 ### Windows
+
 ```powershell
 python packaging/standalone_zip/build_zip.py
 ```
 
 ### macOS
+
 ```bash
 # Install dependencies
 brew install python@3.12 create-dmg
@@ -147,11 +99,13 @@ brew install python@3.12 create-dmg
 ```
 
 ### Linux
+
 ```bash
 python3.12 packaging/standalone_zip/build_zip.py
 ```
 
 For detailed instructions, see:
+
 - [Windows Packaging Guide](packaging/standalone_zip/README.md)
 - [macOS Packaging Guide](packaging/macos/README.md)
 - [macOS Quick Start](packaging/macos/QUICK_START.md)
