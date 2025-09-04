@@ -100,12 +100,14 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
         target_arch = arch or system_info["machine"]
         if target_arch == "x86_64":
             print("Setting x86_64-specific environment variables for correct architecture...")
-            env_vars.update({
-                "ARCHFLAGS": "-arch x86_64",
-                "CFLAGS": "-arch x86_64",
-                "LDFLAGS": "-arch x86_64",
-                "_PYTHON_HOST_PLATFORM": "macosx-10.12-x86_64",
-            })
+            env_vars.update(
+                {
+                    "ARCHFLAGS": "-arch x86_64",
+                    "CFLAGS": "-arch x86_64",
+                    "LDFLAGS": "-arch x86_64",
+                    "_PYTHON_HOST_PLATFORM": "macosx-10.12-x86_64",
+                }
+            )
             print("Environment variables set for x86_64 compilation")
 
         # Step 2: Upgrade pip and install wheel
