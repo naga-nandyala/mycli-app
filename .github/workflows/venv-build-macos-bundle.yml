@@ -34,7 +34,7 @@ on:
 
 jobs:
   build-macos-bundle:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
