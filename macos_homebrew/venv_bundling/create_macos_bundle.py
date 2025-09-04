@@ -95,7 +95,8 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
             print("Installing from pyproject.toml...")
             # Install the project with optional dependencies [azure,broker]
             print("Installing mycli-app package with [azure,broker] extras...")
-            run_command([str(venv_pip), "install", "-e", f"{project_root}[azure,broker]"])
+            # Use regular install instead of editable for bundling
+            run_command([str(venv_pip), "install", f"{project_root}[azure,broker]"])
         else:
             # Fallback: Install basic dependencies manually
             print("Installing basic dependencies...")
@@ -111,7 +112,8 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
 
             # Install the package itself
             print("Installing mycli-app package...")
-            run_command([str(venv_pip), "install", "-e", str(project_root)])
+            # Use regular install instead of editable for bundling
+            run_command([str(venv_pip), "install", str(project_root)])
 
         # Log architecture info (platform-specific wheels are automatically chosen by pip on native systems)
         if arch == "arm64" or (arch is None and system_info["machine"] == "arm64"):
@@ -128,6 +130,9 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
         # Step 6: Clean up unnecessary files
         cleanup_bundle(bundle_path)
 
+        # Step 6.5: Verify bundle functionality before distribution
+        verify_bundle_functionality(bundle_path)
+
         # Step 7: Create distribution packages
         create_distribution_packages(bundle_path, output_path, bundle_name, system_info, arch, version)
 
@@ -137,8 +142,27 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
 
 def create_macos_launcher(bundle_path, bin_dir):
     """Create macOS-specific launcher script."""
+    print("Setting up launcher...")
 
-    # Main launcher script
+    # Check if pip created a console script during installation
+    pip_generated_script = bin_dir / "mycli"
+    if pip_generated_script.exists():
+        print("Found pip-generated console script, using that")
+        # Make sure it's executable
+        os.chmod(pip_generated_script, 0o755)
+
+        # Create a symlink for homebrew compatibility
+        homebrew_launcher = bin_dir / "mycli-homebrew"
+        if homebrew_launcher.exists():
+            homebrew_launcher.unlink()
+        homebrew_launcher.symlink_to("mycli")
+
+        print("Console script setup complete")
+        return
+
+    print("No pip-generated console script found, creating custom launcher...")
+
+    # Main launcher script (fallback if console scripts don't work)
     launcher_content = """#!/bin/bash
 # MyCLI macOS Launcher
 # This script provides a portable way to run mycli on macOS
@@ -150,13 +174,31 @@ VENV_PYTHON="$SCRIPT_DIR/python"
 
 # Check if we're in the correct bundle structure
 if [ ! -f "$VENV_PYTHON" ]; then
-    echo "Error: mycli bundle not found or corrupted"
-    echo "Expected Python at: $VENV_PYTHON"
+    echo "Error: mycli bundle not found or corrupted" >&2
+    echo "Expected Python at: $VENV_PYTHON" >&2
     exit 1
 fi
 
-# Set up environment
-export PYTHONPATH="$BUNDLE_ROOT/lib/python*/site-packages:$PYTHONPATH"
+# Set up environment - expand the glob pattern correctly
+PYTHON_SITEPKG=$(find "$BUNDLE_ROOT/lib" -name "site-packages" -type d 2>/dev/null | head -1)
+if [ -n "$PYTHON_SITEPKG" ]; then
+    export PYTHONPATH="$PYTHON_SITEPKG:$PYTHONPATH"
+fi
+
+# Alternative method: try to use the venv activation if available
+VENV_ACTIVATE="$BUNDLE_ROOT/bin/activate"
+if [ -f "$VENV_ACTIVATE" ]; then
+    source "$VENV_ACTIVATE"
+fi
+
+# Try to run the application with proper error handling
+if ! "$VENV_PYTHON" -c "import mycli_app.cli" 2>/dev/null; then
+    echo "Error: Could not import mycli_app.cli module" >&2
+    echo "Bundle structure may be incomplete" >&2
+    echo "Python path: $PYTHONPATH" >&2
+    echo "Site packages: $PYTHON_SITEPKG" >&2
+    exit 1
+fi
 
 # For Homebrew compatibility, check if we're being called via symlink
 if [ -L "$0" ]; then
@@ -180,6 +222,8 @@ fi
     if homebrew_launcher.exists():
         homebrew_launcher.unlink()
     homebrew_launcher.symlink_to("mycli")
+
+    print("Custom launcher created")
 
 
 def create_bundle_metadata(bundle_path, system_info, arch):
@@ -285,6 +329,66 @@ def cleanup_bundle(bundle_path):
             elif path.is_dir():
                 shutil.rmtree(path)
                 print(f"Removed directory: {path.relative_to(bundle_path)}")
+
+
+def verify_bundle_functionality(bundle_path):
+    """Verify that the bundle works correctly before distribution."""
+
+    print("🔍 Verifying bundle functionality...")
+
+    # Find the mycli executable
+    mycli_path = bundle_path / "bin" / "mycli"
+
+    if not mycli_path.exists():
+        raise Exception(f"mycli executable not found at {mycli_path}")
+
+    # Make sure it's executable
+    import stat
+
+    current_mode = mycli_path.stat().st_mode
+    mycli_path.chmod(current_mode | stat.S_IEXEC)
+
+    # Test version command
+    print("  Testing version command...")
+    try:
+        result = subprocess.run([str(mycli_path), "--version"], capture_output=True, text=True, timeout=30, check=True)
+
+        version_output = result.stdout.strip()
+        print(f"  ✅ Version output: {version_output}")
+
+        # Verify the output contains expected content
+        if "MyCliApp version" not in version_output:
+            print(f"  ⚠️  Warning: Version output doesn't contain 'MyCliApp version'")
+            print(f"  ⚠️  Actual output: '{version_output}'")
+            # Don't fail here, just warn
+
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ Version command failed with exit code {e.returncode}")
+        print(f"  ❌ stdout: {e.stdout}")
+        print(f"  ❌ stderr: {e.stderr}")
+        raise Exception(f"Version command failed: {e}")
+    except subprocess.TimeoutExpired:
+        print(f"  ❌ Version command timed out")
+        raise Exception("Version command timed out")
+
+    # Test help command
+    print("  Testing help command...")
+    try:
+        result = subprocess.run([str(mycli_path), "--help"], capture_output=True, text=True, timeout=30, check=True)
+
+        help_output = result.stdout.strip()
+        print(f"  ✅ Help command succeeded (output length: {len(help_output)} chars)")
+
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ Help command failed with exit code {e.returncode}")
+        print(f"  ❌ stdout: {e.stdout}")
+        print(f"  ❌ stderr: {e.stderr}")
+        raise Exception(f"Help command failed: {e}")
+    except subprocess.TimeoutExpired:
+        print(f"  ❌ Help command timed out")
+        raise Exception("Help command timed out")
+
+    print("  ✅ Bundle verification completed successfully!")
 
 
 def create_distribution_packages(bundle_path, output_path, bundle_name, system_info, arch, version=None):
