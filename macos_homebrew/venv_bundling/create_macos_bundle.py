@@ -155,13 +155,63 @@ def create_macos_launcher(bundle_path, bin_dir):
 # MyCLI Portable Console Script
 # Auto-generated to replace pip's hardcoded-path version
 
-# Get the directory containing this script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUNDLE_PYTHON="$SCRIPT_DIR/python"
+# Get the directory containing this script (resolve symlinks carefully)
+SCRIPT_PATH="${BASH_SOURCE[0]}"
 
-# Check if bundle python exists
-if [ ! -f "$BUNDLE_PYTHON" ]; then
-    echo "Error: Bundle Python interpreter not found at $BUNDLE_PYTHON" >&2
+# If this is a symlink (like from Homebrew), resolve it
+if [ -L "$SCRIPT_PATH" ]; then
+    SCRIPT_PATH="$(readlink -f "$SCRIPT_PATH" 2>/dev/null || realpath "$SCRIPT_PATH" 2>/dev/null || readlink "$SCRIPT_PATH")"
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
+# Debug info
+echo "Debug: Original script: ${BASH_SOURCE[0]}" >&2
+echo "Debug: Resolved script path: $SCRIPT_PATH" >&2
+echo "Debug: Script dir: $SCRIPT_DIR" >&2
+
+# Look for Python interpreter - handle both direct use and Homebrew installation
+BUNDLE_PYTHON=""
+
+# Method 1: Same directory (direct bundle use)
+if [ -f "$SCRIPT_DIR/python" ]; then
+    BUNDLE_PYTHON="$SCRIPT_DIR/python"
+    echo "Debug: Found Python via Method 1 (direct): $BUNDLE_PYTHON" >&2
+
+# Method 2: Check if we're in a Homebrew-style installation
+elif [ -f "$SCRIPT_DIR/../bin/python" ]; then
+    BUNDLE_PYTHON="$SCRIPT_DIR/../bin/python"
+    echo "Debug: Found Python via Method 2 (relative): $BUNDLE_PYTHON" >&2
+
+# Method 3: Look for bundle structure patterns
+else
+    # Check common bundle locations relative to where we are
+    for python_path in \\
+        "$SCRIPT_DIR/../../libexec/bin/python" \\
+        "$SCRIPT_DIR/../libexec/bin/python" \\
+        "$SCRIPT_DIR/python" \\
+        "$SCRIPT_DIR/../python"; do
+        
+        if [ -f "$python_path" ]; then
+            BUNDLE_PYTHON="$python_path"
+            echo "Debug: Found Python via Method 3 (search): $BUNDLE_PYTHON" >&2
+            break
+        fi
+    done
+fi
+
+# If we still can't find Python, provide comprehensive debugging
+if [ -z "$BUNDLE_PYTHON" ] || [ ! -f "$BUNDLE_PYTHON" ]; then
+    echo "Error: Bundle Python interpreter not found" >&2
+    echo "Debug: Comprehensive directory listing:" >&2
+    echo "Debug: Current working directory:" >&2
+    pwd >&2
+    echo "Debug: Script directory ($SCRIPT_DIR):" >&2
+    ls -la "$SCRIPT_DIR" >&2 || echo "Could not list $SCRIPT_DIR" >&2
+    echo "Debug: Parent directory:" >&2
+    ls -la "$(dirname "$SCRIPT_DIR")" >&2 || echo "Could not list parent" >&2
+    echo "Debug: Grandparent directory:" >&2
+    ls -la "$(dirname "$(dirname "$SCRIPT_DIR")")" >&2 || echo "Could not list grandparent" >&2
     exit 1
 fi
 
