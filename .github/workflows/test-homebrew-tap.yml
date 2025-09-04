@@ -1,11 +1,6 @@
-name: Test Homebrew Formula
+name: Test Homebrew Tap
 
 on:
-  # Test after formula updates
-  push:
-    paths:
-      - 'Formula/mycli-app.rb'
-  
   # Test after releases (when binaries are updated)
   release:
     types: [published]
@@ -17,15 +12,18 @@ on:
         description: 'Version to test (leave empty for latest)'
         required: false
         type: string
+  
+  # Test on schedule (weekly)
+  schedule:
+    - cron: '0 10 * * 1'  # Every Monday at 10 AM UTC
 
 jobs:
-  test-homebrew-installation:
-    name: Test Homebrew Installation
+  test-homebrew-tap:
+    name: Test Homebrew Tap Installation
     
     strategy:
       matrix:
-        # Test on both Intel and Apple Silicon runners when available
-        # For now, macos-latest covers Apple Silicon
+        # Test on both Intel and Apple Silicon runners
         include:
           - runner: macos-latest
             arch: arm64
@@ -35,9 +33,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
       - name: Set up Homebrew
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
@@ -57,20 +52,18 @@ jobs:
           brew uninstall mycli-app 2>/dev/null || echo "No previous installation found"
           brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No previous tap found"
       
-      - name: Test Homebrew formula installation
+      - name: Test Homebrew tap installation
         run: |
-          echo "🍺 Installing mycli-app via Homebrew..."
+          echo "🍺 Installing mycli-app via dedicated Homebrew tap..."
           
-          # Create a temporary tap structure
-          echo "� Setting up temporary tap structure..."
-          mkdir -p $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula
-          cp Formula/mycli-app.rb $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula/
+          echo "📋 Adding the homebrew tap..."
+          brew tap naga-nandyala/mycli-app
           
-          echo "� Tap structure created:"
-          ls -la $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app/Formula/
+          echo "📋 Verifying tap was added..."
+          brew tap | grep naga-nandyala/mycli-app
           
-          echo "🍺 Installing via tap:"
-          brew install naga-nandyala/mycli-app/mycli-app
+          echo "🍺 Installing mycli-app..."
+          brew install mycli-app
       
       - name: Verify installation
         run: |
@@ -173,10 +166,14 @@ jobs:
             fi
           fi
       
-      - name: Test formula info
+      - name: Test tap formula info
         run: |
-          echo "📊 Formula information:"
-          brew info naga-nandyala/mycli-app/mycli-app
+          echo "📊 Tap and formula information:"
+          echo "📋 Tap info:"
+          brew tap-info naga-nandyala/mycli-app
+          
+          echo "📋 Formula info:"
+          brew info mycli-app
           
           echo "📁 Installation files:"
           brew list mycli-app
@@ -187,7 +184,6 @@ jobs:
           echo "🧹 Final cleanup..."
           brew uninstall mycli-app 2>/dev/null || echo "Nothing to uninstall"
           brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No tap to remove"
-          rm -rf $(brew --repo)/Library/Taps/naga-nandyala/homebrew-mycli-app 2>/dev/null || echo "Tap directory already clean"
       
       - name: Report results
         if: always()
@@ -205,7 +201,7 @@ jobs:
 
   notify-results:
     name: Notify Test Results
-    needs: test-homebrew-installation
+    needs: test-homebrew-tap
     runs-on: ubuntu-latest
     if: always()
     
@@ -213,13 +209,13 @@ jobs:
       - name: Check test results
         run: |
           echo "🎯 Overall Test Results:"
-          echo "Needed jobs status: ${{ needs.test-homebrew-installation.result }}"
+          echo "Needed jobs status: ${{ needs.test-homebrew-tap.result }}"
           
-          if [[ "${{ needs.test-homebrew-installation.result }}" == "success" ]]; then
-            echo "✅ All Homebrew tests passed successfully!"
-            echo "🍺 Formula is working correctly on all tested platforms"
+          if [[ "${{ needs.test-homebrew-tap.result }}" == "success" ]]; then
+            echo "✅ All Homebrew tap tests passed successfully!"
+            echo "🍺 Tap installation is working correctly on all tested platforms"
           else
-            echo "❌ Some Homebrew tests failed"
+            echo "❌ Some Homebrew tap tests failed"
             echo "🔍 Check the job logs for details"
             exit 1
           fi
