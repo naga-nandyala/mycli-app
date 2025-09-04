@@ -18,37 +18,156 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
+    - name: Checkout main repository
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
       
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
-        
-    - name: Install dependencies
+    - name: Get release information
+      id: get_release
       run: |
-        pip install requests
+        if [ "${{ github.event_name }}" = "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION=${VERSION#v}  # Remove 'v' prefix if present
+        elif [ -n "${{ github.event.inputs.version }}" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          # Get latest release
+          VERSION=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
+          VERSION=${VERSION#v}  # Remove 'v' prefix if present
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Using version: $VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Download and calculate SHA256 hashes
+      id: calculate_hashes
+      run: |
+        VERSION="${{ steps.get_release.outputs.version }}"
+        
+        # Download the release assets
+        echo "Downloading release assets for version $VERSION..."
+        gh release download "v$VERSION" --pattern "*.tar.gz"
+        
+        # Find the ARM64 and x86_64 tarballs
+        ARM64_TARBALL=$(find . -name "*-macos-arm64.tar.gz" | head -1)
+        X86_64_TARBALL=$(find . -name "*-macos-x86_64.tar.gz" | head -1)
+        
+        if [ -z "$ARM64_TARBALL" ] || [ -z "$X86_64_TARBALL" ]; then
+          echo "❌ Could not find both architecture tarballs"
+          echo "Available files:"
+          ls -la *.tar.gz
+          exit 1
+        fi
+        
+        echo "Found tarballs:"
+        echo "ARM64: $ARM64_TARBALL"
+        echo "x86_64: $X86_64_TARBALL"
+        
+        # Calculate SHA256 hashes
+        ARM64_SHA=$(shasum -a 256 "$ARM64_TARBALL" | cut -d' ' -f1)
+        X86_64_SHA=$(shasum -a 256 "$X86_64_TARBALL" | cut -d' ' -f1)
+        
+        echo "SHA256 hashes:"
+        echo "ARM64: $ARM64_SHA"
+        echo "x86_64: $X86_64_SHA"
+        
+        # Set outputs
+        echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+        echo "x86_64_sha=$X86_64_SHA" >> $GITHUB_OUTPUT
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Checkout Homebrew tap repository
+      uses: actions/checkout@v4
+      with:
+        repository: naga-nandyala/homebrew-mycli-app
+        token: ${{ secrets.GITHUB_TOKEN }}
+        path: homebrew-tap
         
     - name: Update Homebrew formula
       run: |
-        cd macos_homebrew
-        python update_formula.py
+        cd homebrew-tap
         
-    - name: Commit and push changes
+        VERSION="${{ steps.get_release.outputs.version }}"
+        ARM64_SHA="${{ steps.calculate_hashes.outputs.arm64_sha }}"
+        X86_64_SHA="${{ steps.calculate_hashes.outputs.x86_64_sha }}"
+        
+        # Update the formula with new version and SHA256 hashes
+        cat > Formula/mycli-app.rb << EOF
+        # Homebrew formula for mycli-app
+        class MycliApp < Formula
+          desc "Simple Azure-like CLI tool by Naga"
+          homepage "https://github.com/naga-nandyala/mycli-app"
+          version "$VERSION"
+          license "MIT"
+
+          base_url = "https://github.com/naga-nandyala/mycli-app/releases/download/v#{version}"
+          
+          if Hardware::CPU.arm?
+            url "#{base_url}/mycli-#{version}-macos-arm64.tar.gz"
+            sha256 "$ARM64_SHA"
+          else
+            url "#{base_url}/mycli-#{version}-macos-x86_64.tar.gz"
+            sha256 "$X86_64_SHA"
+          end
+
+          def install
+            bin.install "mycli"
+          end
+
+          test do
+            assert_match "MyCliApp version", shell_output("#{bin}/mycli --version")
+          end
+        end
+        EOF
+        
+        echo "✅ Formula updated with version $VERSION"
+        echo "ARM64 SHA256: $ARM64_SHA"
+        echo "x86_64 SHA256: $X86_64_SHA"
+        
+    - name: Commit and push formula update
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add Formula/mycli-app.rb
-        if [ "${{ github.event_name }}" = "release" ]; then
-          COMMIT_MSG="Update Homebrew formula for release ${{ github.event.release.tag_name }}"
-        else
-          COMMIT_MSG="Update Homebrew formula (manual trigger)"
+        cd homebrew-tap
+        
+        # Configure git
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # Check if there are changes
+        if git diff --quiet; then
+          echo "No changes to commit"
+          exit 0
         fi
-        git diff --staged --quiet || git commit -m "$COMMIT_MSG"
-        git push
+        
+        VERSION="${{ steps.get_release.outputs.version }}"
+        
+        # Create commit message
+        if [ "${{ github.event_name }}" = "release" ]; then
+          COMMIT_MSG="Update mycli-app to version $VERSION
+
+        Released: ${{ github.event.release.tag_name }}
+        - ARM64 SHA256: ${{ steps.calculate_hashes.outputs.arm64_sha }}
+        - x86_64 SHA256: ${{ steps.calculate_hashes.outputs.x86_64_sha }}
+        
+        Automated update from release workflow"
+        else
+          COMMIT_MSG="Update mycli-app to version $VERSION
+
+        - ARM64 SHA256: ${{ steps.calculate_hashes.outputs.arm64_sha }}
+        - x86_64 SHA256: ${{ steps.calculate_hashes.outputs.x86_64_sha }}
+        
+        Automated update (manual trigger)"
+        fi
+        
+        # Commit and push changes
+        git add Formula/mycli-app.rb
+        git commit -m "$COMMIT_MSG"
+        git push origin master
+        
+        echo "✅ Homebrew tap updated successfully!"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
