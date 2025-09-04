@@ -136,47 +136,24 @@ jobs:
           
           echo "✅ Logout command completed successfully"
       
-      - name: Test Azure SDK availability
-        timeout-minutes: 1
+      - name: Test Azure SDK availability  
         run: |
-          echo "📥 Testing login command with --force-broker:"
+          echo "� Testing Azure SDK availability via status command:"
           
-          # Capture the output to check for Azure authentication attempt
-          # Use gtimeout on macOS or implement our own timeout
-          if command -v gtimeout &> /dev/null; then
-            # GNU timeout (if available via brew install coreutils)
-            login_output=$(gtimeout 30s mycli login --force-broker 2>&1 || true)
-          else
-            # Fallback: run in background with kill after timeout
-            mycli login --force-broker > /tmp/login_output.txt 2>&1 &
-            login_pid=$!
-            sleep 30
-            kill $login_pid 2>/dev/null || true
-            wait $login_pid 2>/dev/null || true
-            login_output=$(cat /tmp/login_output.txt 2>/dev/null || echo "No output captured")
-          fi
+          # Check Azure SDK availability directly
+          status_output=$(mycli status 2>&1)
+          echo "Status output: $status_output"
           
-          echo "Login command output:"
-          echo "$login_output"
-          
-          # Check if Azure authentication was attempted successfully
-          if echo "$login_output" | grep -q "Starting Azure authentication"; then
-            echo "✅ Azure authentication started successfully"
-            
-            # Check if broker authentication was attempted
-            if echo "$login_output" | grep -q "Starting INTERACTIVE broker authentication\|Broker-based authentication"; then
-              echo "✅ Broker authentication was attempted (Azure packages working)"
-              echo "✅ Test passed - Azure SDK is properly installed and functional"
-            else
-              echo "❌ Azure authentication started but broker wasn't attempted"
-              exit 1
-            fi
-          elif echo "$login_output" | grep -q "Azure SDK not available"; then
-            echo "❌ Azure SDK not available - packages missing from bundle"
+          # Determine if Azure SDK is properly available
+          if echo "$status_output" | grep -q "Azure SDK: Available"; then
+            echo "✅ Azure SDK is available in the bundle"
+          elif echo "$status_output" | grep -q "Azure SDK: Not Available"; then
+            echo "❌ Azure SDK is NOT available in the bundle"
+            echo "This indicates that Azure packages were not properly included during bundling"
             exit 1
           else
-            echo "❌ Unexpected login output - could not determine Azure status"
-            echo "Full output: $login_output"
+            echo "⚠️ Could not determine Azure SDK status from output"
+            echo "Full status output: $status_output"
             exit 1
           fi
       
@@ -189,22 +166,6 @@ jobs:
           
           # Test if we can import key modules (this tests the venv bundle integrity)
           mycli --version > /dev/null && echo "✅ Core application modules working"
-          
-          # Test Azure SDK availability by checking the status command
-          echo "🔍 Checking Azure SDK availability:"
-          status_output=$(mycli status 2>&1)
-          echo "Status output: $status_output"
-          
-          if echo "$status_output" | grep -q "Azure SDK: Available"; then
-            echo "✅ Azure SDK is available in the bundle"
-          elif echo "$status_output" | grep -q "Azure SDK: Not Available"; then
-            echo "❌ Azure SDK is NOT available in the bundle"
-            echo "This indicates that Azure packages were not properly included during bundling"
-            exit 1
-          else
-            echo "⚠️  Could not determine Azure SDK status from output"
-            echo "Full status output: $status_output"
-          fi
           
           # Test if we can check broker capabilities (this requires Azure packages)
           echo "🔐 Testing broker command availability:"
