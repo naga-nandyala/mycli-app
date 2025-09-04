@@ -16,7 +16,7 @@ This guide helps you build and distribute MyCliApp as a standalone Windows EXE p
 
 ```powershell
 # Navigate to project root
-cd /path/to/your/project
+cd mycli-app
 
 # Build with default settings
 .\installers\windows-exe\build.ps1
