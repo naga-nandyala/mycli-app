@@ -1,0 +1,168 @@
+name: PyInstaller Master - Complete Release Pipeline
+
+# Simple master workflow that triggers the 3 PyInstaller workflows sequentially
+
+permissions:
+  contents: write
+  actions: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+      skip_tests:
+        description: 'Skip final testing'
+        type: boolean
+        default: false
+
+jobs:
+  trigger-workflows:
+    name: "🚀 Trigger PyInstaller Pipeline"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"  # Remove 'v' prefix
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
+
+      - name: 1️⃣ Trigger and Wait for Release Binaries
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Trigger the release binaries workflow
+            const buildDispatch = await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'pyinstaller-release_binaries.yml',
+              ref: 'main',
+              inputs: {
+                version: '${{ steps.version.outputs.version }}',
+                architecture: 'both'
+              }
+            });
+            console.log('✅ Triggered: Release Binaries workflow');
+            
+            // Wait for the workflow to start and complete
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10s for workflow to start
+            
+            let attempts = 0;
+            const maxAttempts = 60; // 30 minutes max wait (30s intervals)
+            
+            while (attempts < maxAttempts) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'pyinstaller-release_binaries.yml',
+                per_page: 5
+              });
+              
+              const latestRun = runs.data.workflow_runs[0];
+              
+              if (latestRun && latestRun.status === 'completed') {
+                if (latestRun.conclusion === 'success') {
+                  console.log('✅ Release Binaries workflow completed successfully');
+                  break;
+                } else {
+                  throw new Error(`❌ Release Binaries workflow failed with conclusion: ${latestRun.conclusion}`);
+                }
+              }
+              
+              console.log(`⏳ Waiting for Release Binaries to complete... (attempt ${attempts + 1}/${maxAttempts})`);
+              await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30s
+              attempts++;
+            }
+            
+            if (attempts >= maxAttempts) {
+              throw new Error('❌ Timeout waiting for Release Binaries workflow to complete');
+            }
+
+      - name: 2️⃣ Trigger and Wait for Update Formula  
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Trigger the update workflow
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'pyinstaller-update-homebrew-formula.yml',
+              ref: 'main',
+              inputs: {
+                version: '${{ steps.version.outputs.version }}'
+              }
+            });
+            console.log('✅ Triggered: Update Formula workflow');
+            
+            // Wait for the workflow to start and complete
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10s for workflow to start
+            
+            let attempts = 0;
+            const maxAttempts = 30; // 15 minutes max wait
+            
+            while (attempts < maxAttempts) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'pyinstaller-update-homebrew-formula.yml',
+                per_page: 5
+              });
+              
+              const latestRun = runs.data.workflow_runs[0];
+              
+              if (latestRun && latestRun.status === 'completed') {
+                if (latestRun.conclusion === 'success') {
+                  console.log('✅ Update Formula workflow completed successfully');
+                  break;
+                } else {
+                  throw new Error(`❌ Update Formula workflow failed with conclusion: ${latestRun.conclusion}`);
+                }
+              }
+              
+              console.log(`⏳ Waiting for Update Formula to complete... (attempt ${attempts + 1}/${maxAttempts})`);
+              await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30s
+              attempts++;
+            }
+            
+            if (attempts >= maxAttempts) {
+              throw new Error('❌ Timeout waiting for Update Formula workflow to complete');
+            }
+
+      - name: 3️⃣ Trigger Test Formula
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'pyinstaller-test-homebrew-tap.yml',
+              ref: 'main',
+              inputs: {
+                test_version: '${{ steps.version.outputs.version }}'
+              }
+            });
+            console.log('✅ Triggered: Test Formula workflow (running independently)');
+
+      - name: 🎉 Pipeline Started
+        run: |
+          echo "🚀 PyInstaller Pipeline started for version ${{ steps.version.outputs.version }}"
+          echo "📋 Check the Actions tab to monitor progress of individual workflows"
+          echo "🔗 https://github.com/${{ github.repository }}/actions"
+          echo ""
+          echo "📦 Pipeline Steps:"
+          echo "  1️⃣ Release Binaries (pyinstaller-release_binaries.yml)"
+          echo "  2️⃣ Update Homebrew Formula (pyinstaller-update-homebrew-formula.yml)"
+          echo "  3️⃣ Test Homebrew Tap (pyinstaller-test-homebrew-tap.yml)"
