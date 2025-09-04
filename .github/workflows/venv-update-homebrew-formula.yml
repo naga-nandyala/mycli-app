@@ -1,0 +1,243 @@
+name: Venv Bundling - Update Homebrew Formula
+
+# This workflow automatically updates the Homebrew formula for venv bundling releases
+# when a new venv bundle release is published or when manually triggered.
+# This workflow is specifically designed for the venv bundling approach which creates
+# portable virtual environment bundles instead of single PyInstaller executables.
+#
+# Authentication: Uses HOMEBREW_TAP_TOKEN secret (Personal Access Token) for cross-repository access.
+# If HOMEBREW_TAP_TOKEN is not available, falls back to GITHUB_TOKEN (limited permissions).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to update formula for (e.g., 1.0.0). Leave empty to use latest release.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout main repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+      
+    - name: Get release information
+      id: get_release
+      run: |
+        if [ "${{ github.event_name }}" = "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION=${VERSION#v}  # Remove 'v' prefix if present
+        elif [ -n "${{ github.event.inputs.version }}" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          # Get latest release by published date
+          VERSION=$(gh release list --limit 10 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[0].tagName')
+          VERSION=${VERSION#v}  # Remove 'v' prefix if present
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Using version: $VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Download and calculate SHA256 hashes
+      id: calculate_hashes
+      run: |
+        VERSION="${{ steps.get_release.outputs.version }}"
+        
+        # Download the release assets
+        echo "Downloading release assets for version $VERSION..."
+        gh release download "v$VERSION" --pattern "*.tar.gz"
+        
+        # Find the ARM64 and x86_64 tarballs (handle different naming patterns)
+        # Look for files ending with the architecture pattern
+        ARM64_TARBALL=$(find . -name "*.tar.gz" | grep -E '(arm64|aarch64)\.tar\.gz$' | head -1)
+        X86_64_TARBALL=$(find . -name "*.tar.gz" | grep -E 'x86_64\.tar\.gz$' | head -1)
+        
+        if [ -z "$ARM64_TARBALL" ] || [ -z "$X86_64_TARBALL" ]; then
+          echo "❌ Could not find both architecture tarballs"
+          echo "Available files:"
+          ls -la *.tar.gz
+          exit 1
+        fi
+        
+        echo "Found tarballs:"
+        echo "ARM64: $ARM64_TARBALL"
+        echo "x86_64: $X86_64_TARBALL"
+        
+        # Extract just the filenames for the formula URLs
+        ARM64_FILENAME=$(basename "$ARM64_TARBALL")
+        X86_64_FILENAME=$(basename "$X86_64_TARBALL")
+        
+        echo "Filenames for formula:"
+        echo "ARM64: $ARM64_FILENAME"
+        echo "x86_64: $X86_64_FILENAME"
+        
+        # Calculate SHA256 hashes
+        ARM64_SHA=$(shasum -a 256 "$ARM64_TARBALL" | cut -d' ' -f1)
+        X86_64_SHA=$(shasum -a 256 "$X86_64_TARBALL" | cut -d' ' -f1)
+        
+        echo "SHA256 hashes:"
+        echo "ARM64: $ARM64_SHA"
+        echo "x86_64: $X86_64_SHA"
+        
+        # Set outputs
+        echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+        echo "x86_64_sha=$X86_64_SHA" >> $GITHUB_OUTPUT
+        echo "arm64_filename=$ARM64_FILENAME" >> $GITHUB_OUTPUT
+        echo "x86_64_filename=$X86_64_FILENAME" >> $GITHUB_OUTPUT
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Checkout Homebrew tap repository
+      uses: actions/checkout@v4
+      with:
+        repository: naga-nandyala/homebrew-mycli-app
+        token: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
+        path: homebrew-tap
+        
+    - name: Update Homebrew formula for venv bundling
+      run: |
+        cd homebrew-tap
+        
+        VERSION="${{ steps.get_release.outputs.version }}"
+        ARM64_SHA="${{ steps.calculate_hashes.outputs.arm64_sha }}"
+        X86_64_SHA="${{ steps.calculate_hashes.outputs.x86_64_sha }}"
+        ARM64_FILENAME="${{ steps.calculate_hashes.outputs.arm64_filename }}"
+        X86_64_FILENAME="${{ steps.calculate_hashes.outputs.x86_64_filename }}"
+        
+        # Create Formula directory if it doesn't exist
+        mkdir -p Formula
+        
+        # Update the formula with new version and SHA256 hashes
+        cat > Formula/mycli-app-venv.rb << EOF
+        # Homebrew formula for mycli-app (venv bundling approach)
+        class MycliAppVenv < Formula
+          desc "Simple Azure-like CLI tool by Naga (Portable Virtual Environment Bundle)"
+          homepage "https://github.com/naga-nandyala/mycli-app"
+          version "$VERSION"
+          license "MIT"
+
+          base_url = "https://github.com/naga-nandyala/mycli-app/releases/download/v#{version}"
+          
+          if Hardware::CPU.arm?
+            url "#{base_url}/$ARM64_FILENAME"
+            sha256 "$ARM64_SHA"
+          else
+            url "#{base_url}/$X86_64_FILENAME"
+            sha256 "$X86_64_SHA"
+          end
+
+          def install
+            # The venv bundle contains a complete virtual environment
+            # Install the entire bundle to libexec and symlink the binary
+            libexec.install Dir["*"]
+            bin.install_symlink libexec/"bin/mycli"
+          end
+
+          test do
+            assert_match "MyCliApp version", shell_output("#{bin}/mycli --version")
+            
+            # Test Azure authentication capabilities
+            help_output = shell_output("#{bin}/mycli --help")
+            assert_match "azure", help_output.downcase
+          end
+          
+          def caveats
+            <<~EOS
+              This is the venv bundling version of mycli-app, which includes a complete
+              portable virtual environment with all dependencies.
+              
+              Features:
+              - Complete Python virtual environment
+              - Azure authentication with MSAL broker support
+              - Native architecture support (Intel and Apple Silicon)
+              - All dependencies bundled for offline operation
+              
+              To use Azure authentication features, run:
+                mycli --help
+                
+              For the alternative PyInstaller version, install:
+                brew install naga-nandyala/mycli-app/mycli-app
+                
+              For more information, visit:
+                https://github.com/naga-nandyala/mycli-app
+            EOS
+          end
+        end
+        EOF
+        
+        echo "✅ Venv bundling formula updated with version $VERSION"
+        echo "ARM64 SHA256: $ARM64_SHA"
+        echo "x86_64 SHA256: $X86_64_SHA"
+        
+        # Debug: Show the created file
+        echo "📋 Created formula file:"
+        ls -la Formula/mycli-app-venv.rb
+        echo "📋 Formula file content preview:"
+        head -20 Formula/mycli-app-venv.rb
+        
+    - name: Commit and push formula update
+      run: |
+        cd homebrew-tap
+        
+        # Configure git
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # Debug: Show current state
+        echo "📋 Current directory and files:"
+        pwd
+        ls -la
+        echo "📋 Formula directory:"
+        ls -la Formula/
+        
+        # Check if there are changes (including untracked files)
+        echo "📋 Git status:"
+        git status --porcelain
+        if [[ -z "$(git status --porcelain)" ]]; then
+          echo "No changes to commit"
+          exit 0
+        fi
+        
+        VERSION="${{ steps.get_release.outputs.version }}"
+        
+        # Create commit message
+        if [ "${{ github.event_name }}" = "release" ]; then
+          COMMIT_MSG="Update mycli-app-venv to version $VERSION (venv bundling)
+
+        Released: ${{ github.event.release.tag_name }}
+        - ARM64 SHA256: ${{ steps.calculate_hashes.outputs.arm64_sha }}
+        - x86_64 SHA256: ${{ steps.calculate_hashes.outputs.x86_64_sha }}
+        
+        This release uses the venv bundling approach with portable virtual environments.
+        Automated update from release workflow"
+        else
+          COMMIT_MSG="Update mycli-app-venv to version $VERSION (venv bundling)
+
+        - ARM64 SHA256: ${{ steps.calculate_hashes.outputs.arm64_sha }}
+        - x86_64 SHA256: ${{ steps.calculate_hashes.outputs.x86_64_sha }}
+        
+        This release uses the venv bundling approach with portable virtual environments.
+        Automated update (manual trigger)"
+        fi
+        
+        # Commit and push changes
+        git add Formula/mycli-app-venv.rb
+        git commit -m "$COMMIT_MSG"
+        git push origin main
+        
+        echo "✅ Homebrew tap updated successfully for venv bundling!"
+      env:
+        GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
