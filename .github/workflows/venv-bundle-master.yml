@@ -39,11 +39,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using version: $VERSION"
 
-      - name: 1️⃣ Trigger Build Bundle
+      - name: 1️⃣ Trigger and Wait for Build Bundle
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.actions.createWorkflowDispatch({
+            // Trigger the build workflow
+            const buildDispatch = await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'venv-build-macos-bundle.yml',
@@ -54,14 +55,46 @@ jobs:
               }
             });
             console.log('✅ Triggered: Build Bundle workflow');
+            
+            // Wait for the workflow to start and complete
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10s for workflow to start
+            
+            let attempts = 0;
+            const maxAttempts = 60; // 30 minutes max wait (30s intervals)
+            
+            while (attempts < maxAttempts) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'venv-build-macos-bundle.yml',
+                per_page: 5
+              });
+              
+              const latestRun = runs.data.workflow_runs[0];
+              
+              if (latestRun && latestRun.status === 'completed') {
+                if (latestRun.conclusion === 'success') {
+                  console.log('✅ Build Bundle workflow completed successfully');
+                  break;
+                } else {
+                  throw new Error(`❌ Build Bundle workflow failed with conclusion: ${latestRun.conclusion}`);
+                }
+              }
+              
+              console.log(`⏳ Waiting for Build Bundle to complete... (attempt ${attempts + 1}/${maxAttempts})`);
+              await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30s
+              attempts++;
+            }
+            
+            if (attempts >= maxAttempts) {
+              throw new Error('❌ Timeout waiting for Build Bundle workflow to complete');
+            }
 
-      - name: ⏳ Wait between triggers
-        run: sleep 10
-
-      - name: 2️⃣ Trigger Update Formula  
+      - name: 2️⃣ Trigger and Wait for Update Formula  
         uses: actions/github-script@v7
         with:
           script: |
+            // Trigger the update workflow
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -72,9 +105,40 @@ jobs:
               }
             });
             console.log('✅ Triggered: Update Formula workflow');
-
-      - name: ⏳ Wait between triggers
-        run: sleep 10
+            
+            // Wait for the workflow to start and complete
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10s for workflow to start
+            
+            let attempts = 0;
+            const maxAttempts = 30; // 15 minutes max wait
+            
+            while (attempts < maxAttempts) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'venv-update-homebrew-formula.yml',
+                per_page: 5
+              });
+              
+              const latestRun = runs.data.workflow_runs[0];
+              
+              if (latestRun && latestRun.status === 'completed') {
+                if (latestRun.conclusion === 'success') {
+                  console.log('✅ Update Formula workflow completed successfully');
+                  break;
+                } else {
+                  throw new Error(`❌ Update Formula workflow failed with conclusion: ${latestRun.conclusion}`);
+                }
+              }
+              
+              console.log(`⏳ Waiting for Update Formula to complete... (attempt ${attempts + 1}/${maxAttempts})`);
+              await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30s
+              attempts++;
+            }
+            
+            if (attempts >= maxAttempts) {
+              throw new Error('❌ Timeout waiting for Update Formula workflow to complete');
+            }
 
       - name: 3️⃣ Trigger Test Formula
         if: ${{ github.event.inputs.skip_tests != 'true' }}
@@ -90,7 +154,7 @@ jobs:
                 test_version: '${{ steps.version.outputs.version }}'
               }
             });
-            console.log('✅ Triggered: Test Formula workflow');
+            console.log('✅ Triggered: Test Formula workflow (running independently)');
 
       - name: 🎉 Pipeline Started
         run: |
