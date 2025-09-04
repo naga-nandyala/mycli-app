@@ -429,7 +429,7 @@ def cleanup_bundle(bundle_path):
         "**/tests*",
         "**/.git*",
         "**/.*",
-        "**/bin/pip",      # Only remove pip executable, not files containing "pip"
+        "**/bin/pip",  # Only remove pip executable, not files containing "pip"
         "**/bin/pip[0-9]*",
         "**/bin/easy_install*",
     ]
@@ -632,6 +632,84 @@ else:
     except subprocess.TimeoutExpired:
         print("  ❌ Status command timed out")
         raise Exception("Status command timed out")
+
+    # Test the actual Azure import issue that's causing the CLI to fail
+    print("  Testing Azure imports in CLI context...")
+    try:
+        azure_cli_test_script = """
+import sys
+import os
+
+# Test the same imports that mycli_app.cli would use
+print("\\n=== Testing CLI Azure Import Context ===")
+
+# Add the bundle's site-packages to sys.path if needed
+import site
+print(f"Site packages dirs: {site.getsitepackages()}")
+
+try:
+    # Test the exact imports that mycli_app.cli uses
+    from mycli_app.cli import AZURE_AVAILABLE
+    print(f"✅ AZURE_AVAILABLE from CLI: {AZURE_AVAILABLE}")
+    
+    if AZURE_AVAILABLE:
+        print("✅ Azure packages detected by CLI module")
+    else:
+        print("❌ Azure packages NOT detected by CLI module")
+        # Try to understand why
+        try:
+            import azure.identity
+            print("  - azure.identity is importable directly")
+        except ImportError as e:
+            print(f"  - azure.identity import fails: {e}")
+        
+        try:
+            import azure.core  
+            print("  - azure.core is importable directly")
+        except ImportError as e:
+            print(f"  - azure.core import fails: {e}")
+        
+        try:
+            import azure.mgmt.core
+            print("  - azure.mgmt.core is importable directly") 
+        except ImportError as e:
+            print(f"  - azure.mgmt.core import fails: {e}")
+            
+        try:
+            import msal
+            print("  - msal is importable directly")
+        except ImportError as e:
+            print(f"  - msal import fails: {e}")
+        
+except ImportError as e:
+    print(f"❌ Failed to import from mycli_app.cli: {e}")
+    sys.exit(1)
+"""
+        
+        result = subprocess.run(
+            [str(python_path), "-c", azure_cli_test_script], 
+            capture_output=True, text=True, timeout=30, check=True
+        )
+
+        cli_test_output = result.stdout.strip()
+        print("  ✅ CLI Azure context test:")
+        for line in cli_test_output.split("\n"):
+            print(f"    {line}")
+
+        if "AZURE_AVAILABLE from CLI: False" in cli_test_output:
+            print("  ❌ CLI module reports Azure as NOT available")
+            raise Exception("CLI module cannot detect Azure packages even though they're installed")
+        elif "AZURE_AVAILABLE from CLI: True" in cli_test_output:
+            print("  ✅ CLI module reports Azure as available")
+
+    except subprocess.CalledProcessError as e:
+        print(f"  ❌ CLI Azure context test failed with exit code {e.returncode}")
+        print(f"  ❌ stdout: {e.stdout}")
+        print(f"  ❌ stderr: {e.stderr}")
+        raise Exception(f"CLI Azure context test failed: {e}")
+    except subprocess.TimeoutExpired:
+        print("  ❌ CLI Azure context test timed out")
+        raise Exception("CLI Azure context test timed out")
 
     print("  ✅ Bundle verification completed successfully!")
 
