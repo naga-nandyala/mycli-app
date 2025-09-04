@@ -106,6 +106,13 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
             ]
             run_command(pip_cmd + ["install"] + azure_dependencies)
             
+            # Force reinstall azure-core to ensure all submodules are present
+            print("Force reinstalling azure-core to ensure completeness...")
+            run_command(pip_cmd + ["install", "--force-reinstall", "--no-deps", "azure-core>=1.24.0"])
+            
+            # Then reinstall dependencies for azure-core
+            run_command(pip_cmd + ["install", "azure-core>=1.24.0"])
+            
             # Then install the project with optional dependencies [azure,broker]
             print("Installing mycli-app package with [azure,broker] extras...")
             # Use regular install instead of editable for bundling
@@ -460,8 +467,80 @@ def verify_bundle_functionality(bundle_path):
     # Test Azure dependencies are available
     print("  Testing Azure dependencies...")
     try:
+        # More comprehensive Azure import test
         azure_check_script = """
 import sys
+import os
+
+# Print Python path info
+print("Python executable:", sys.executable)
+print("Python path:", sys.path)
+
+# Test basic Azure imports first
+print("\\n=== Testing Basic Azure Imports ===")
+try:
+    import azure
+    print("✅ azure namespace package imported")
+    print(f"Azure package path: {azure.__path__}")
+except ImportError as e:
+    print(f"❌ azure namespace import failed: {e}")
+    sys.exit(1)
+
+try:
+    import azure.core
+    print("✅ azure.core imported")
+    print(f"azure.core path: {azure.core.__file__}")
+except ImportError as e:
+    print(f"❌ azure.core import failed: {e}")
+    sys.exit(1)
+
+# Test specific submodules that might be missing
+print("\\n=== Testing Azure Submodules ===")
+submodules_to_test = [
+    "azure.core.pipeline",
+    "azure.core.pipeline.policies",
+    "azure.core.pipeline.transport",
+    "azure.identity",
+    "azure.mgmt.core",
+    "msal"
+]
+
+failed_imports = []
+for module in submodules_to_test:
+    try:
+        __import__(module)
+        print(f"✅ {module} imported successfully")
+    except ImportError as e:
+        print(f"❌ {module} import failed: {e}")
+        failed_imports.append(module)
+
+if failed_imports:
+    print(f"\\n❌ Failed to import: {', '.join(failed_imports)}")
+    
+    # Try to diagnose the azure.core structure
+    print("\\n=== Diagnosing azure.core structure ===")
+    try:
+        import azure.core
+        core_dir = os.path.dirname(azure.core.__file__)
+        print(f"azure.core directory: {core_dir}")
+        print("Contents of azure.core directory:")
+        for item in os.listdir(core_dir):
+            print(f"  {item}")
+            
+        pipeline_path = os.path.join(core_dir, "pipeline")
+        if os.path.exists(pipeline_path):
+            print(f"\\npipeline directory exists at: {pipeline_path}")
+            print("Contents of pipeline directory:")
+            for item in os.listdir(pipeline_path):
+                print(f"  {item}")
+        else:
+            print(f"\\n❌ pipeline directory not found at: {pipeline_path}")
+    except Exception as e:
+        print(f"Could not diagnose azure.core structure: {e}")
+    
+    sys.exit(1)
+
+print("\\n=== All Azure imports successful ===")
 try:
     import azure.identity
     import azure.core
