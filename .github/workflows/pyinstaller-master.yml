@@ -51,7 +51,7 @@ jobs:
               ref: 'main',
               inputs: {
                 version: '${{ steps.version.outputs.version }}',
-                architecture: 'both'
+                create_release: 'true'
               }
             });
             console.log('✅ Triggered: Release Binaries workflow');
