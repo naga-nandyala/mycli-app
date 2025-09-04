@@ -160,11 +160,11 @@ export PYTHONPATH="$BUNDLE_ROOT/lib/python*/site-packages:$PYTHONPATH"
 
 # For Homebrew compatibility, check if we're being called via symlink
 if [ -L "$0" ]; then
-    # Called via Homebrew symlink, use the bundle's Python
-    exec "$VENV_PYTHON" -m mycli_app "$@"
+    # Called via Homebrew symlink, use the bundle's Python with the correct entry point
+    exec "$VENV_PYTHON" -m mycli_app.cli "$@"
 else
-    # Called directly, use the bundle's Python
-    exec "$VENV_PYTHON" -m mycli_app "$@"
+    # Called directly, use the bundle's Python with the correct entry point
+    exec "$VENV_PYTHON" -m mycli_app.cli "$@"
 fi
 """
 
