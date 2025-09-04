@@ -27,6 +27,17 @@ def run_command(cmd, cwd=None, check=True):
     return result
 
 
+def run_command_with_env(cmd, env_vars, cwd=None, check=True):
+    """Run a command with custom environment variables."""
+    print(f"Running with custom env: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check, env=env_vars)
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr and result.returncode != 0:
+        print(f"Error: {result.stderr}")
+    return result
+
+
 def get_macos_info():
     """Get macOS system information."""
     system_info = {
@@ -84,8 +95,21 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
         # Use python -m pip for better reliability (same as successful Windows test)
         pip_cmd = [str(venv_python), "-m", "pip"]
 
+        # Set environment variables for x86_64 builds to ensure correct architecture
+        env_vars = os.environ.copy()
+        target_arch = arch or system_info["machine"]
+        if target_arch == "x86_64":
+            print("Setting x86_64-specific environment variables for correct architecture...")
+            env_vars.update({
+                "ARCHFLAGS": "-arch x86_64",
+                "CFLAGS": "-arch x86_64",
+                "LDFLAGS": "-arch x86_64",
+                "_PYTHON_HOST_PLATFORM": "macosx-10.12-x86_64",
+            })
+            print("Environment variables set for x86_64 compilation")
+
         # Step 2: Upgrade pip and install wheel
-        run_command(pip_cmd + ["install", "--upgrade", "pip", "wheel"])
+        run_command_with_env(pip_cmd + ["install", "--upgrade", "pip", "wheel"], env_vars)
 
         # Step 3: Install dependencies
         install_args = pip_cmd + ["install", "--no-cache-dir"]
@@ -104,19 +128,23 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
                 "azure-core>=1.24.0",
                 "msal[broker]>=1.20.0,<2",
             ]
-            run_command(pip_cmd + ["install"] + azure_dependencies)
+            # Use modified run_command that passes environment variables
+            run_command_with_env(install_args + azure_dependencies, env_vars)
 
             # Force reinstall azure-core to ensure all submodules are present
             print("Force reinstalling azure-core to ensure completeness...")
-            run_command(pip_cmd + ["install", "--force-reinstall", "--no-deps", "azure-core>=1.24.0"])
+            force_reinstall_args = pip_cmd + ["install", "--force-reinstall", "--no-deps"]
+            run_command_with_env(force_reinstall_args + ["azure-core>=1.24.0"], env_vars)
 
             # Then reinstall dependencies for azure-core
-            run_command(pip_cmd + ["install", "azure-core>=1.24.0"])
+            azure_core_args = pip_cmd + ["install"]
+            run_command_with_env(azure_core_args + ["azure-core>=1.24.0"], env_vars)
 
             # Then install the project with optional dependencies [azure,broker]
             print("Installing mycli-app package with [azure,broker] extras...")
             # Use regular install instead of editable for bundling
-            run_command(pip_cmd + ["install", f"{project_root}[azure,broker]"])
+            project_install_args = pip_cmd + ["install"]
+            run_command_with_env(project_install_args + [f"{project_root}[azure,broker]"], env_vars)
 
             # List installed packages for debugging
             print("\nInstalled packages:")
@@ -151,7 +179,7 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
             # Install the package itself
             print("Installing mycli-app package...")
             # Use regular install instead of editable for bundling
-            run_command(pip_cmd + ["install", str(project_root)])
+            run_command_with_env(pip_cmd + ["install", str(project_root)], env_vars)
 
         # Log architecture info (platform-specific wheels are automatically chosen by pip on native systems)
         if arch == "arm64" or (arch is None and system_info["machine"] == "arm64"):
