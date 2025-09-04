@@ -1,6 +1,6 @@
 # MyCliApp
 
-[![Homebrew Formula Test](https://github.com/naga-nandyala/mycli-app/actions/workflows/test-homebrew-formula.yml/badge.svg)](https://github.com/naga-nandyala/mycli-app/actions/workflows/test-homebrew-formula.yml)
+[![Homebrew Tap Test](https://github.com/naga-nandyala/mycli-app/actions/workflows/test-homebrew-tap.yml/badge.svg)](https://github.com/naga-nandyala/mycli-app/actions/workflows/test-homebrew-tap.yml)
 
 A simple CLI application similar to Azure CLI with Azure authentication capabilities.
 
