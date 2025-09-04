@@ -78,14 +78,17 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
         run_command([python_exe, "-m", "venv", str(bundle_path)])
 
         # macOS-specific paths
-        venv_pip = bundle_path / "bin" / "pip"
+        venv_python = bundle_path / "bin" / "python"
         bin_dir = bundle_path / "bin"
 
+        # Use python -m pip for better reliability (same as successful Windows test)
+        pip_cmd = [str(venv_python), "-m", "pip"]
+
         # Step 2: Upgrade pip and install wheel
-        run_command([str(venv_pip), "install", "--upgrade", "pip", "wheel"])
+        run_command(pip_cmd + ["install", "--upgrade", "pip", "wheel"])
 
         # Step 3: Install dependencies
-        install_args = [str(venv_pip), "install", "--no-cache-dir"]
+        install_args = pip_cmd + ["install", "--no-cache-dir"]
 
         # Install project dependencies from pyproject.toml
         project_root = Path(__file__).parent.parent.parent
@@ -93,10 +96,38 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
 
         if pyproject_file.exists():
             print("Installing from pyproject.toml...")
-            # Install the project with optional dependencies [azure,broker]
+            # First install the Azure dependencies explicitly
+            print("Installing Azure dependencies explicitly...")
+            azure_dependencies = [
+                "azure-identity>=1.12.0",
+                "azure-mgmt-core>=1.3.0",
+                "azure-core>=1.24.0",
+                "msal[broker]>=1.20.0,<2",
+            ]
+            run_command(pip_cmd + ["install"] + azure_dependencies)
+            
+            # Then install the project with optional dependencies [azure,broker]
             print("Installing mycli-app package with [azure,broker] extras...")
             # Use regular install instead of editable for bundling
-            run_command([str(venv_pip), "install", f"{project_root}[azure,broker]"])
+            run_command(pip_cmd + ["install", f"{project_root}[azure,broker]"])
+            
+            # List installed packages for debugging
+            print("\nInstalled packages:")
+            run_command(pip_cmd + ["list"], check=False)
+            
+            # Check for Azure packages specifically
+            print("\nChecking for Azure packages:")
+            azure_check = run_command(pip_cmd + ["show", "azure-core"], check=False)
+            if azure_check.returncode == 0:
+                print("azure-core is installed")
+            else:
+                print("azure-core is NOT installed")
+            
+            azure_identity_check = run_command(pip_cmd + ["show", "azure-identity"], check=False)
+            if azure_identity_check.returncode == 0:
+                print("azure-identity is installed")
+            else:
+                print("azure-identity is NOT installed")
         else:
             # Fallback: Install basic dependencies manually
             print("Installing basic dependencies...")
@@ -113,7 +144,7 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
             # Install the package itself
             print("Installing mycli-app package...")
             # Use regular install instead of editable for bundling
-            run_command([str(venv_pip), "install", str(project_root)])
+            run_command(pip_cmd + ["install", str(project_root)])
 
         # Log architecture info (platform-specific wheels are automatically chosen by pip on native systems)
         if arch == "arm64" or (arch is None and system_info["machine"] == "arm64"):
