@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MyCliApp - A simple CLI application similar to Azure CLI
+MyCliApp - A simple CLI application similar to Azure CLI -
 """
 
 import click
