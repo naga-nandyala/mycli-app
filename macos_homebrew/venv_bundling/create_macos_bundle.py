@@ -105,23 +105,23 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
                 "msal[broker]>=1.20.0,<2",
             ]
             run_command(pip_cmd + ["install"] + azure_dependencies)
-            
+
             # Force reinstall azure-core to ensure all submodules are present
             print("Force reinstalling azure-core to ensure completeness...")
             run_command(pip_cmd + ["install", "--force-reinstall", "--no-deps", "azure-core>=1.24.0"])
-            
+
             # Then reinstall dependencies for azure-core
             run_command(pip_cmd + ["install", "azure-core>=1.24.0"])
-            
+
             # Then install the project with optional dependencies [azure,broker]
             print("Installing mycli-app package with [azure,broker] extras...")
             # Use regular install instead of editable for bundling
             run_command(pip_cmd + ["install", f"{project_root}[azure,broker]"])
-            
+
             # List installed packages for debugging
             print("\nInstalled packages:")
             run_command(pip_cmd + ["list"], check=False)
-            
+
             # Check for Azure packages specifically
             print("\nChecking for Azure packages:")
             azure_check = run_command(pip_cmd + ["show", "azure-core"], check=False)
@@ -129,7 +129,7 @@ def create_macos_venv_bundle(output_dir, python_version=None, arch=None, version
                 print("azure-core is installed")
             else:
                 print("azure-core is NOT installed")
-            
+
             azure_identity_check = run_command(pip_cmd + ["show", "azure-identity"], check=False)
             if azure_identity_check.returncode == 0:
                 print("azure-identity is installed")
@@ -429,12 +429,16 @@ def cleanup_bundle(bundle_path):
         "**/tests*",
         "**/.git*",
         "**/.*",
-        "**/pip*",
-        "**/easy_install*",
+        "**/bin/pip",      # Only remove pip executable, not files containing "pip"
+        "**/bin/pip[0-9]*",
+        "**/bin/easy_install*",
     ]
 
     for pattern in cleanup_patterns:
         for path in bundle_path.glob(pattern):
+            # Extra safety: don't remove anything in azure packages
+            if "azure" in str(path):
+                continue
             if path.is_file():
                 path.unlink()
                 print(f"Removed file: {path.relative_to(bundle_path)}")
