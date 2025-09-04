@@ -779,10 +779,9 @@ except ImportError as e:
     print(f"❌ Failed to import from mycli_app.cli: {e}")
     sys.exit(1)
 """
-        
+
         result = subprocess.run(
-            [str(python_path), "-c", azure_cli_test_script], 
-            capture_output=True, text=True, timeout=30, check=True
+            [str(python_path), "-c", azure_cli_test_script], capture_output=True, text=True, timeout=30, check=True
         )
 
         cli_test_output = result.stdout.strip()
