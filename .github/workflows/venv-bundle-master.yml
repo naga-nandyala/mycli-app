@@ -1,7 +1,6 @@
 name: Venv Bundle Master - Complete Release Pipeline
 
-# Simple master workflow that triggers the 3 venv workflows sequentially:
-# 1. Build Bundle → 2. Update Formula → 3. Test Formula
+# Simple master workflow that triggers the 3 venv workflows sequentially
 
 permissions:
   contents: write
@@ -23,24 +22,78 @@ on:
         default: false
 
 jobs:
-  build-bundle:
-    name: "🔨 Build Bundle"
-    uses: ./.github/workflows/venv-build-macos-bundle.yml
-    with:
-      version: ${{ github.event.inputs.version || github.ref_name }}
-      architecture: 'both'
+  trigger-workflows:
+    name: "🚀 Trigger Pipeline"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"  # Remove 'v' prefix
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
 
-  update-formula:
-    name: "📝 Update Formula" 
-    needs: build-bundle
-    uses: ./.github/workflows/venv-update-homebrew-formula.yml
-    with:
-      version: ${{ github.event.inputs.version || github.ref_name }}
+      - name: 1️⃣ Trigger Build Bundle
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'venv-build-macos-bundle.yml',
+              ref: 'main',
+              inputs: {
+                version: '${{ steps.version.outputs.version }}',
+                architecture: 'both'
+              }
+            });
+            console.log('✅ Triggered: Build Bundle workflow');
 
-  test-formula:
-    name: "🧪 Test Formula"
-    needs: update-formula
-    if: ${{ github.event.inputs.skip_tests != 'true' }}
-    uses: ./.github/workflows/venv-test-homebrew-tap.yml
-    with:
-      test_version: ${{ github.event.inputs.version || github.ref_name }}
+      - name: ⏳ Wait between triggers
+        run: sleep 10
+
+      - name: 2️⃣ Trigger Update Formula  
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'venv-update-homebrew-formula.yml',
+              ref: 'main',
+              inputs: {
+                version: '${{ steps.version.outputs.version }}'
+              }
+            });
+            console.log('✅ Triggered: Update Formula workflow');
+
+      - name: ⏳ Wait between triggers
+        run: sleep 10
+
+      - name: 3️⃣ Trigger Test Formula
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'venv-test-homebrew-tap.yml',
+              ref: 'main',
+              inputs: {
+                test_version: '${{ steps.version.outputs.version }}'
+              }
+            });
+            console.log('✅ Triggered: Test Formula workflow');
+
+      - name: 🎉 Pipeline Started
+        run: |
+          echo "🚀 Venv Bundle Pipeline started for version ${{ steps.version.outputs.version }}"
+          echo "📋 Check the Actions tab to monitor progress of individual workflows"
+          echo "🔗 https://github.com/${{ github.repository }}/actions"
