@@ -248,6 +248,36 @@ fi
 # Execute the main CLI function
 exec "$BUNDLE_PYTHON" -c "
 import sys
+import os
+
+# Debug: Print Python path information
+print('Debug: Python executable:', sys.executable, file=sys.stderr)
+print('Debug: Python path:', sys.path, file=sys.stderr)
+
+# Debug: Try to find site-packages
+for path in sys.path:
+    if 'site-packages' in path:
+        print(f'Debug: Found site-packages at: {path}', file=sys.stderr)
+        # Check if azure packages exist
+        azure_path = os.path.join(path, 'azure')
+        if os.path.exists(azure_path):
+            print(f'Debug: Azure packages found at: {azure_path}', file=sys.stderr)
+        else:
+            print(f'Debug: No azure packages at: {azure_path}', file=sys.stderr)
+
+# Debug: Test Azure imports before running main
+try:
+    import azure.identity
+    print(f'Debug: azure.identity imported successfully from {azure.identity.__file__}', file=sys.stderr)
+except ImportError as e:
+    print(f'Debug: azure.identity import failed: {e}', file=sys.stderr)
+
+try:
+    import azure.core
+    print(f'Debug: azure.core imported successfully from {azure.core.__file__}', file=sys.stderr)
+except ImportError as e:
+    print(f'Debug: azure.core import failed: {e}', file=sys.stderr)
+
 from mycli_app.cli import main
 if __name__ == '__main__':
     sys.exit(main())
@@ -315,10 +345,74 @@ fi
 # For Homebrew compatibility, check if we're being called via symlink
 if [ -L "$0" ]; then
     # Called via Homebrew symlink, use the bundle's Python with entry point
-    exec "$VENV_PYTHON" -c "from mycli_app.cli import main; main()" "$@"
+    exec "$VENV_PYTHON" -c "
+import sys
+import os
+
+# Debug: Print Python path information  
+print('Debug: Python executable:', sys.executable, file=sys.stderr)
+print('Debug: Python path:', sys.path, file=sys.stderr)
+
+# Debug: Try to find site-packages
+for path in sys.path:
+    if 'site-packages' in path:
+        print(f'Debug: Found site-packages at: {path}', file=sys.stderr)
+        # Check if azure packages exist
+        azure_path = os.path.join(path, 'azure')
+        if os.path.exists(azure_path):
+            print(f'Debug: Azure packages found at: {azure_path}', file=sys.stderr)
+        else:
+            print(f'Debug: No azure packages at: {azure_path}', file=sys.stderr)
+
+# Debug: Test Azure imports before running main
+try:
+    import azure.identity
+    print(f'Debug: azure.identity imported successfully from {azure.identity.__file__}', file=sys.stderr)
+except ImportError as e:
+    print(f'Debug: azure.identity import failed: {e}', file=sys.stderr)
+
+try:
+    import azure.core
+    print(f'Debug: azure.core imported successfully from {azure.core.__file__}', file=sys.stderr)
+except ImportError as e:
+    print(f'Debug: azure.core import failed: {e}', file=sys.stderr)
+
+from mycli_app.cli import main; main()" "$@"
 else
     # Called directly, use the bundle's Python with entry point
-    exec "$VENV_PYTHON" -c "from mycli_app.cli import main; main()" "$@"
+    exec "$VENV_PYTHON" -c "
+import sys
+import os
+
+# Debug: Print Python path information
+print('Debug: Python executable:', sys.executable, file=sys.stderr)
+print('Debug: Python path:', sys.path, file=sys.stderr)
+
+# Debug: Try to find site-packages
+for path in sys.path:
+    if 'site-packages' in path:
+        print(f'Debug: Found site-packages at: {path}', file=sys.stderr)
+        # Check if azure packages exist
+        azure_path = os.path.join(path, 'azure')
+        if os.path.exists(azure_path):
+            print(f'Debug: Azure packages found at: {azure_path}', file=sys.stderr)
+        else:
+            print(f'Debug: No azure packages at: {azure_path}', file=sys.stderr)
+
+# Debug: Test Azure imports before running main
+try:
+    import azure.identity
+    print(f'Debug: azure.identity imported successfully from {azure.identity.__file__}', file=sys.stderr)
+except ImportError as e:
+    print(f'Debug: azure.identity import failed: {e}', file=sys.stderr)
+
+try:
+    import azure.core
+    print(f'Debug: azure.core imported successfully from {azure.core.__file__}', file=sys.stderr)
+except ImportError as e:
+    print(f'Debug: azure.core import failed: {e}', file=sys.stderr)
+
+from mycli_app.cli import main; main()" "$@"
 fi
 """
 
