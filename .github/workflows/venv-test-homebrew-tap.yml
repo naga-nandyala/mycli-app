@@ -142,7 +142,19 @@ jobs:
           echo "📥 Testing login command with --force-broker:"
           
           # Capture the output to check for Azure authentication attempt
-          login_output=$(timeout 30s mycli login --force-broker 2>&1 || true)
+          # Use gtimeout on macOS or implement our own timeout
+          if command -v gtimeout &> /dev/null; then
+            # GNU timeout (if available via brew install coreutils)
+            login_output=$(gtimeout 30s mycli login --force-broker 2>&1 || true)
+          else
+            # Fallback: run in background with kill after timeout
+            mycli login --force-broker > /tmp/login_output.txt 2>&1 &
+            login_pid=$!
+            sleep 30
+            kill $login_pid 2>/dev/null || true
+            wait $login_pid 2>/dev/null || true
+            login_output=$(cat /tmp/login_output.txt 2>/dev/null || echo "No output captured")
+          fi
           
           echo "Login command output:"
           echo "$login_output"
