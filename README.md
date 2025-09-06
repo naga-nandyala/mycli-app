@@ -6,6 +6,13 @@
 
 A professional CLI application inspired by Azure CLI with comprehensive Azure authentication capabilities and cross-platform distribution support.
 
+## 📖 Documentation
+
+For detailed information about this project, please refer to our comprehensive documentation:
+
+- **[MyCliApp Functionality](MYCLI_FUNCTIONALITY.md)** - Complete overview of features, commands, authentication methods, and technical implementation
+- **[macOS Packaging Approaches](MACOS_PACKAGING_APPROACHES.md)** - Comprehensive guide to all macOS distribution strategies including Homebrew, PyInstaller, App Bundles, PKG installers, and DMG creation
+
 ## ✨ Features
 
 ### 🔐 Advanced Authentication
