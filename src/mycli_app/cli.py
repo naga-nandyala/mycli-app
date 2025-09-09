@@ -1128,7 +1128,7 @@ def status():
     user_display = user_info.get("user_id", "None") if is_authenticated() else "None"
     auth_method = _auth_state.get("auth_method", "None") if is_authenticated() else "None"
 
-    click.echo(f"{Fore.BLUE}📊 System Status:{Style.RESET_ALL}")
+    click.echo(f"{Fore.BLUE}Status Report:{Style.RESET_ALL}")
     click.echo(f"  Service: {Fore.GREEN}Online{Style.RESET_ALL}")
     click.echo(f"  Authentication: {auth_color}{auth_status} ({user_display}){Style.RESET_ALL}")
     if is_authenticated():
