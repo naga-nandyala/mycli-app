@@ -134,7 +134,8 @@ def get_native_broker_credential(tenant_id=None):
 
         # Use MSAL directly for better broker control
         tenant_id = tenant_id or "common"
-        authority = f"https://login.microsoftonline.com/{tenant_id}"
+        # authority = f"https://login.microsoftonline.com/{tenant_id}"
+        authority = f"https://login.microsoftonline.com/common"
 
         # Create a public client application with broker support
         app = msal.PublicClientApplication(
@@ -160,7 +161,7 @@ def get_native_broker_credential(tenant_id=None):
         click.echo(f"{Fore.BLUE}🚨 Starting INTERACTIVE broker authentication - popup should appear{Style.RESET_ALL}")
         result = app.acquire_token_interactive(
             scopes=["https://management.azure.com/.default"],
-            parent_window_handle=app.CONSOLE_WINDOW_HANDLE,  # Use console window handle for CLI apps
+            parent_window_handle=app.CONSOLE_WINDOW_HANDLE,  # Use console window handle for CLI apps            
             enable_broker=True,
             prompt="select_account",  # Force account selection
             login_hint=None,  # Don't hint any specific account
@@ -192,7 +193,8 @@ def get_macos_broker_credential(tenant_id=None):
 
         # Use MSAL directly for better broker control on macOS
         tenant_id = tenant_id or "common"
-        authority = f"https://login.microsoftonline.com/{tenant_id}"
+        # authority = f"https://login.microsoftonline.com/{tenant_id}"
+        authority = f"https://login.microsoftonline.com/common"
 
         # Create a public client application with broker support for macOS
         app = msal.PublicClientApplication(
