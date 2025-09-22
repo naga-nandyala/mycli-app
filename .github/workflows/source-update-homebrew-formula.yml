@@ -317,33 +317,13 @@ jobs:
                     if file_info['packagetype'] == 'sdist':
                         return file_info['url'], file_info['digests']['sha256'], latest_version
                 
-                # Special handling for binary-wheel packages like pymsalruntime (similar to AWS CLI's awscrt)
+                # Special handling for binary-wheel packages like pymsalruntime
+                # These packages are platform-specific and should be installed dynamically by pip
                 if package_name == 'pymsalruntime':
-                    print(f"🔍 {package_name} is a binary wheel package (like AWS CLI's awscrt)", file=sys.stderr)
-                    print(f"   Will be handled with selective pip install during formula build", file=sys.stderr)
-                    # Find the wheel distribution - prefer cp312 for Python 3.12 compatibility
-                    for file_info in data['urls']:
-                        if (file_info['packagetype'] == 'bdist_wheel' and 
-                            'cp312' in file_info['filename'] and 
-                            'macos' in file_info['filename'].lower()):
-                            print(f"✅ Found cp312 macOS wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
-                            return file_info['url'], file_info['digests']['sha256'], latest_version
-                    # If no cp312 macOS wheel, try any cp312 wheel
-                    for file_info in data['urls']:
-                        if file_info['packagetype'] == 'bdist_wheel' and 'cp312' in file_info['filename']:
-                            print(f"✅ Found cp312 wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
-                            return file_info['url'], file_info['digests']['sha256'], latest_version
-                    # Fallback to any macOS wheel
-                    for file_info in data['urls']:
-                        if file_info['packagetype'] == 'bdist_wheel' and 'macos' in file_info['filename'].lower():
-                            print(f"✅ Found macOS wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
-                            return file_info['url'], file_info['digests']['sha256'], latest_version
-                    # If no macOS-specific wheel, use any available wheel
-                    for file_info in data['urls']:
-                        if file_info['packagetype'] == 'bdist_wheel':
-                            print(f"✅ Found wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
-                            return file_info['url'], file_info['digests']['sha256'], latest_version
-                    print(f"⚠️  No wheel found for {package_name}, will rely on pip to handle platform-specific installation", file=sys.stderr)
+                    print(f"🔍 {package_name} is a platform-specific binary wheel package", file=sys.stderr)
+                    print(f"   Will be installed dynamically during formula build (not as a resource)", file=sys.stderr)
+                    # Skip this package - it will be installed via pip install during build
+                    return None, None, None
                 else:
                     print(f"No source distribution found for {package_name} {latest_version}", file=sys.stderr)
                 return None, None, None
@@ -688,15 +668,13 @@ jobs:
             # Create virtual environment
             venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
             
-            # Install source-available dependencies first (excluding binary wheels)
-            # This follows the AWS CLI pattern for handling binary-only packages
-            venv.pip_install resources.reject { |r| r.name == "pymsalruntime" }
+            # Install all dependencies from resources
+            # (pymsalruntime is excluded from resources and handled separately)
+            venv.pip_install resources
 
-            # Install pymsalruntime binary wheel separately using direct wheel installation
-            if resources.any? { |r| r.name == "pymsalruntime" }
-              pymsalruntime_wheel = resource("pymsalruntime").cached_download
-              system venv.root/"bin/pip", "install", "--no-deps", pymsalruntime_wheel, exception: true
-            end
+            # Install pymsalruntime separately using pip with automatic platform detection
+            # This allows pip to select the correct wheel for the target platform
+            system venv.root/"bin/pip", "install", "pymsalruntime", exception: true
 
             # Install the main application
             venv.pip_install buildpath
@@ -743,10 +721,10 @@ jobs:
               - MSAL token caching and refresh
               
               ✨ Technical Implementation:
-              - Uses AWS CLI-style selective pip install for binary wheels
+              - Uses dynamic pip install for platform-specific binary wheels
               - Source dependencies built from PyPI source distributions
-              - Binary wheels (pymsalruntime) installed separately for compatibility
-              - Follows Homebrew Core best practices for mixed dependency types
+              - pymsalruntime installed with automatic platform detection
+              - Follows Homebrew best practices for mixed dependency types
               
               📱 Available authentication commands:
                 mycli login                    # Browser authentication (default)
@@ -810,15 +788,15 @@ jobs:
         Released: ${{ github.event.release.tag_name }}
         - Source SHA256: ${{ steps.calculate_hash.outputs.source_sha }}
         
-        This release uses the source-based approach with AWS CLI-style binary wheel handling.
+        This release uses the source-based approach with dynamic platform-specific dependency handling.
         Features:
         - Built from source for maximum compatibility
         - Dependencies managed by Homebrew's virtualenv system
         - Full broker authentication support with pymsalruntime
-        - AWS CLI-style selective pip install for binary wheels
+        - Dynamic pip install for platform-specific binary wheels
         - Automatic security updates for dependencies
         
-        Technical implementation follows AWS CLI pattern for mixed source/binary dependencies.
+        Technical implementation uses dynamic pip install for platform-specific packages.
         
         Automated update from release workflow"
         else
@@ -826,15 +804,15 @@ jobs:
 
         - Source SHA256: ${{ steps.calculate_hash.outputs.source_sha }}
         
-        This release uses the source-based approach with AWS CLI-style binary wheel handling.
+        This release uses the source-based approach with dynamic platform-specific dependency handling.
         Features:
         - Built from source for maximum compatibility
         - Dependencies managed by Homebrew's virtualenv system
         - Full broker authentication support with pymsalruntime
-        - AWS CLI-style selective pip install for binary wheels
+        - Dynamic pip install for platform-specific binary wheels
         - Automatic security updates for dependencies
         
-        Technical implementation follows AWS CLI pattern for mixed source/binary dependencies.
+        Technical implementation uses dynamic pip install for platform-specific packages.
         
         Automated update (manual trigger)"
         fi

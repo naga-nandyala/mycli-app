@@ -98,11 +98,6 @@ class MycliAppSrc < Formula
     sha256 "3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953"
   end
 
-  resource "pymsalruntime" do
-    url "https://files.pythonhosted.org/packages/af/4f/7b99671b2dacdecbb9bd9caccb0fe9b0a39d4579c488b25ebf73613bda8d/pymsalruntime-0.18.1-cp312-cp312-macosx_14_0_arm64.whl"
-    sha256 "a6c07651cf4e07690d1b022da0977f56820ef553ac6dcbf4c9e68e9611020997"
-  end
-
   resource "requests" do
     url "https://files.pythonhosted.org/packages/c9/74/b3ff8e6c8446842c3f5c837e9c3dfcfe2018ea6ecef224c710c85ef728f4/requests-2.32.5.tar.gz"
     sha256 "dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf"
@@ -132,15 +127,13 @@ class MycliAppSrc < Formula
     # Create virtual environment
     venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
     
-    # Install source-available dependencies first (excluding binary wheels)
-    # This follows the AWS CLI pattern for handling binary-only packages
-    venv.pip_install resources.reject { |r| r.name == "pymsalruntime" }
+    # Install all dependencies from resources
+    # (pymsalruntime is excluded from resources and handled separately)
+    venv.pip_install resources
 
-    # Install pymsalruntime binary wheel separately using direct wheel installation
-    if resources.any? { |r| r.name == "pymsalruntime" }
-      pymsalruntime_wheel = resource("pymsalruntime").cached_download
-      system venv.root/"bin/pip", "install", "--no-deps", pymsalruntime_wheel, exception: true
-    end
+    # Install pymsalruntime separately using pip with automatic platform detection
+    # This allows pip to select the correct wheel for the target platform
+    system venv.root/"bin/pip", "install", "pymsalruntime", exception: true
 
     # Install the main application
     venv.pip_install buildpath
@@ -187,10 +180,10 @@ class MycliAppSrc < Formula
       - MSAL token caching and refresh
       
       ✨ Technical Implementation:
-      - Uses AWS CLI-style selective pip install for binary wheels
+      - Uses dynamic pip install for platform-specific binary wheels
       - Source dependencies built from PyPI source distributions
-      - Binary wheels (pymsalruntime) installed separately for compatibility
-      - Follows Homebrew Core best practices for mixed dependency types
+      - pymsalruntime installed with automatic platform detection
+      - Follows Homebrew best practices for mixed dependency types
       
       📱 Available authentication commands:
         mycli login                    # Browser authentication (default)
