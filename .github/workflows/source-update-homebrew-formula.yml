@@ -161,60 +161,59 @@ jobs:
                     subprocess.run([str(pip_exe), "install", "--upgrade", "pip"], 
                                  check=True, capture_output=True, text=True)
                     
-                    # Install the main application (which should pull in all dependencies)
-                    print("📦 Installing main application with all optional dependencies...", file=sys.stderr)
+                    # Install from pyproject.toml with azure and broker extras
+                    print("📦 Installing from pyproject.toml with [azure,broker] extras...", file=sys.stderr)
                     
-                    # Install with azure and broker extras to get complete dependency tree
-                    install_cmd = [str(pip_exe), "install", ".", "[azure,broker]"]
+                    # Install with both azure and broker extras to get complete dependency tree
+                    install_cmd = [str(pip_exe), "install", "-e", ".[azure,broker]"]
                     print(f"🔨 Running: {' '.join(install_cmd)}", file=sys.stderr)
-                    result = subprocess.run(install_cmd, capture_output=True, text=True)
+                    result = subprocess.run(install_cmd, capture_output=True, text=True, cwd=".")
                     
                     if result.returncode != 0:
                         print(f"⚠️  Installation with extras failed, trying alternative approach...", file=sys.stderr)
-                        print(f"Error: {result.stderr}", file=sys.stderr)
+                        print(f"Error stdout: {result.stdout}", file=sys.stderr)
+                        print(f"Error stderr: {result.stderr}", file=sys.stderr)
                         
-                        # Fallback: install dependencies directly from pyproject.toml
-                        deps, extras_deps = parse_pyproject_toml()
+                        # Fallback: install base package first, then extras
+                        print("🔄 Trying step-by-step installation...", file=sys.stderr)
                         
-                        # Install main dependencies
-                        main_deps = [f"{name}>={version.lstrip('>=')}" for name, version in deps]
+                        # Install base package
+                        base_cmd = [str(pip_exe), "install", "-e", "."]
+                        print(f"🔨 Installing base: {' '.join(base_cmd)}", file=sys.stderr)
+                        base_result = subprocess.run(base_cmd, capture_output=True, text=True, cwd=".")
                         
-                        # Install optional dependencies
-                        optional_deps = []
+                        if base_result.returncode != 0:
+                            print(f"❌ Base installation failed: {base_result.stderr}", file=sys.stderr)
+                            return None
+                        
+                        # Install optional dependencies manually from pyproject.toml
+                        print("📋 Installing optional dependencies from pyproject.toml...", file=sys.stderr)
                         with open('pyproject.toml', 'rb') as f:
                             data = tomli.load(f)
                         
-                        azure_deps = data.get('project', {}).get('optional-dependencies', {}).get('azure', [])
-                        broker_deps = data.get('project', {}).get('optional-dependencies', {}).get('broker', [])
+                        optional_deps = data.get('project', {}).get('optional-dependencies', {})
                         
-                        all_deps = main_deps + azure_deps + broker_deps
-                        print(f"📋 Installing dependencies directly: {all_deps}", file=sys.stderr)
+                        # Install azure dependencies
+                        if 'azure' in optional_deps:
+                            for dep in optional_deps['azure']:
+                                try:
+                                    print(f"🔨 Installing azure dep: {dep}", file=sys.stderr)
+                                    subprocess.run([str(pip_exe), "install", dep], 
+                                                 check=True, capture_output=True, text=True)
+                                except subprocess.CalledProcessError as e:
+                                    print(f"⚠️  Failed to install azure dep {dep}: {e}", file=sys.stderr)
                         
-                        for dep in all_deps:
-                            try:
-                                # Handle msal[broker] specially
-                                if 'msal[broker]' in dep:
-                                    # Install msal with broker extra
-                                    dep_cmd = [str(pip_exe), "install", dep]
-                                else:
-                                    dep_cmd = [str(pip_exe), "install", dep]
-                                
-                                print(f"🔨 Installing: {dep}", file=sys.stderr)
-                                subprocess.run(dep_cmd, check=True, capture_output=True, text=True)
-                            except subprocess.CalledProcessError as e:
-                                print(f"⚠️  Failed to install {dep}: {e}", file=sys.stderr)
-                    
-                    # Explicitly ensure broker dependencies are installed
-                    print("🔐 Ensuring broker dependencies are present...", file=sys.stderr)
-                    broker_deps = ["pymsalruntime", "msal-extensions"]
-                    for broker_dep in broker_deps:
-                        try:
-                            print(f"🔐 Installing broker dependency: {broker_dep}", file=sys.stderr)
-                            subprocess.run([str(pip_exe), "install", broker_dep], 
-                                         check=True, capture_output=True, text=True)
-                        except subprocess.CalledProcessError as e:
-                            print(f"⚠️  Failed to install broker dependency {broker_dep}: {e}", file=sys.stderr)
-                            # Not fatal - some broker deps might be platform-specific
+                        # Install broker dependencies
+                        if 'broker' in optional_deps:
+                            for dep in optional_deps['broker']:
+                                try:
+                                    print(f"� Installing broker dep: {dep}", file=sys.stderr)
+                                    subprocess.run([str(pip_exe), "install", dep], 
+                                                 check=True, capture_output=True, text=True)
+                                except subprocess.CalledProcessError as e:
+                                    print(f"⚠️  Failed to install broker dep {dep}: {e}", file=sys.stderr)
+                    else:
+                        print("✅ Installation with extras successful!", file=sys.stderr)
                     
                     # Get list of installed packages
                     print("📋 Getting list of installed packages...", file=sys.stderr)
@@ -396,16 +395,16 @@ jobs:
                 print(f"Error getting extra dependencies for {package_name}[{extras}]: {e}", file=sys.stderr)
                 return []
         
-        # Try dynamic dependency resolution first
-        print("🚀 Starting dynamic dependency resolution...", file=sys.stderr)
+        # Prioritize dynamic dependency resolution from pyproject.toml
+        print("🚀 Starting dynamic dependency resolution from pyproject.toml...", file=sys.stderr)
         dynamic_deps = resolve_dependencies_dynamically()
         
-        if dynamic_deps:
+        if dynamic_deps and len(dynamic_deps) >= 5:  # Accept if we have at least 5 dependencies
             print(f"✅ Dynamic resolution successful! Found {len(dynamic_deps)} dependencies", file=sys.stderr)
             dependencies = dynamic_deps
             packages_with_extras = []  # Extras are already resolved in the complete list
         else:
-            print("🔄 Dynamic resolution failed, using pyproject.toml parsing...", file=sys.stderr)
+            print("🔄 Dynamic resolution failed or insufficient dependencies, using pyproject.toml parsing...", file=sys.stderr)
             # Parse dependencies from pyproject.toml (fallback)
             result = parse_pyproject_toml()
             if isinstance(result, tuple):
@@ -415,8 +414,8 @@ jobs:
                 dependencies = result
                 packages_with_extras = []
         
-        # Check if we have enough dependencies (should have at least 15+ for a complete Azure CLI)
-        if not dependencies or len(dependencies) < 10:
+        # Only use hardcoded fallback if we have very few dependencies (less than 3)
+        if not dependencies or len(dependencies) < 3:
             print(f"❌ Insufficient dependencies found ({len(dependencies) if dependencies else 0}), using hardcoded complete list", file=sys.stderr)
             # Fallback to hardcoded dependencies with broker support
             dependencies = [
