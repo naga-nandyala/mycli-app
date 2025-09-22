@@ -5,13 +5,7 @@ name: Test AWS CLI-Style Homebrew Formula
 # while building other dependencies from source
 
 on:
-  # Test after the source formula is updated
-  workflow_run:
-    workflows: ["Source Installation - Update Homebrew Formula"]
-    types:
-      - completed
-  
-  # Allow manual testing
+  # Primary trigger: Manual testing
   workflow_dispatch:
     inputs:
       test_version:
@@ -19,19 +13,18 @@ on:
         required: false
         type: string
   
-  # Test on schedule (weekly)
-  schedule:
-    - cron: '0 14 * * 1'  # Every Monday at 2 PM UTC
+  # Optional: Test on schedule (weekly, commented out by default)
+  # schedule:
+  #   - cron: '0 14 * * 1'  # Every Monday at 2 PM UTC
 
 jobs:
   test-aws-cli-style-formula:
     name: Test AWS CLI-Style Formula Installation
     
-    # Only run if the source update workflow succeeded (or on manual/schedule trigger)
+    # Run on manual trigger or schedule
     if: |
       github.event_name == 'workflow_dispatch' || 
-      github.event_name == 'schedule' || 
-      github.event.workflow_run.conclusion == 'success'
+      github.event_name == 'schedule'
     
     strategy:
       matrix:
@@ -58,6 +51,11 @@ jobs:
           echo "macOS Version: $(sw_vers -productVersion)"
           echo "Homebrew Version: $(brew --version | head -n1)"
           echo "Python Version: $(python3 --version)"
+          
+          # Show input parameters
+          echo "📋 Workflow Inputs:"
+          echo "Test Version: '${{ github.event.inputs.test_version }}'"
+          echo "Trigger: Manual workflow dispatch"
       
       - name: Clean previous installations
         run: |
