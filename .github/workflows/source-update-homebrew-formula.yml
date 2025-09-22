@@ -1,0 +1,454 @@
+name: Source Installation - Update Homebrew Formula
+
+# This workflow automatically updates the Homebrew formula for source-based installation
+# when a new release is published or when manually triggered.
+# This workflow is specifically designed for the source-based approach which builds from
+# source code and manages dependencies through Homebrew's virtualenv system.
+#
+# Authentication: Uses HOMEBREW_TAP_TOKEN secret (Personal Access Token) for cross-repository access.
+# If HOMEBREW_TAP_TOKEN is not available, falls back to GITHUB_TOKEN (limited permissions).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to update formula for (e.g., 1.0.0). Leave empty to use latest release.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout main repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+      
+    - name: Get release information
+      id: get_release
+      run: |
+        if [ "${{ github.event_name }}" = "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION=${VERSION#v}  # Remove 'v' prefix if present
+        elif [ -n "${{ github.event.inputs.version }}" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          # Get latest release by published date
+          VERSION=$(gh release list --limit 10 --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[0].tagName')
+          VERSION=${VERSION#v}  # Remove 'v' prefix if present
+        fi
+        
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Using version: $VERSION"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Calculate source tarball SHA256 hash
+      id: calculate_hash
+      run: |
+        VERSION="${{ steps.get_release.outputs.version }}"
+        
+        # Download the source tarball from GitHub
+        SOURCE_URL="https://github.com/naga-nandyala/mycli-app/archive/refs/tags/v${VERSION}.tar.gz"
+        echo "Downloading source tarball from: $SOURCE_URL"
+        
+        curl -L -o "mycli-app-${VERSION}.tar.gz" "$SOURCE_URL"
+        
+        # Calculate SHA256 hash
+        SOURCE_SHA=$(shasum -a 256 "mycli-app-${VERSION}.tar.gz" | cut -d' ' -f1)
+        
+        echo "Source SHA256: $SOURCE_SHA"
+        
+        # Set output
+        echo "source_sha=$SOURCE_SHA" >> $GITHUB_OUTPUT
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Get Python dependency information
+      id: get_dependencies
+      run: |
+        # Install Python and required tools
+        python3 -m pip install --upgrade pip requests tomli
+        
+        # Create a script to fetch dependency information from PyPI
+        cat > get_deps.py << 'EOF'
+        import requests
+        import json
+        import sys
+        import tomli
+        import re
+        
+        def parse_pyproject_toml():
+            """Parse pyproject.toml to extract dependencies"""
+            try:
+                with open('pyproject.toml', 'rb') as f:
+                    data = tomli.load(f)
+                
+                dependencies = []
+                
+                # Get main dependencies
+                main_deps = data.get('project', {}).get('dependencies', [])
+                for dep in main_deps:
+                    name, version = parse_dependency_spec(dep)
+                    if name and version:
+                        dependencies.append((name, version))
+                
+                # Get optional dependencies (azure, broker groups)
+                optional_deps = data.get('project', {}).get('optional-dependencies', {})
+                for group_name in ['azure', 'broker']:
+                    if group_name in optional_deps:
+                        for dep in optional_deps[group_name]:
+                            name, version = parse_dependency_spec(dep)
+                            if name and version:
+                                # Avoid duplicates
+                                if (name, version) not in dependencies:
+                                    dependencies.append((name, version))
+                
+                return dependencies
+                
+            except Exception as e:
+                print(f"Error parsing pyproject.toml: {e}", file=sys.stderr)
+                return []
+        
+        def parse_dependency_spec(dep_spec):
+            """Parse dependency specification like 'click>=8.0.0' or 'azure-identity>=1.12.0'"""
+            # Handle different version specifiers
+            if '>=' in dep_spec:
+                name, version = dep_spec.split('>=', 1)
+                return name.strip(), version.strip()
+            elif '==' in dep_spec:
+                name, version = dep_spec.split('==', 1)
+                return name.strip(), version.strip()
+            elif '>' in dep_spec:
+                name, version = dep_spec.split('>', 1)
+                return name.strip(), version.strip()
+            elif '[' in dep_spec:
+                # Handle extras like 'msal[broker]>=1.20.0,<2'
+                match = re.match(r'^([^[]+)(?:\[[^\]]+\])?(.*)', dep_spec)
+                if match:
+                    name = match.group(1).strip()
+                    version_part = match.group(2).strip()
+                    if '>=' in version_part:
+                        version = version_part.split('>=')[1].split(',')[0].strip()
+                        return name, version
+                    elif '==' in version_part:
+                        version = version_part.split('==')[1].split(',')[0].strip()
+                        return name, version
+            else:
+                # Just package name, get latest
+                return dep_spec.strip(), "latest"
+            
+            return None, None
+        
+        def get_package_info(package_name, version_spec):
+            """Get PyPI package download URL and SHA256 hash for latest compatible version"""
+            try:
+                # For version specs like ">=1.12.0" or "latest", get the latest version
+                if version_spec == "latest" or version_spec.startswith('>=') or version_spec.startswith('>'):
+                    # Get package info to find latest version
+                    url = f"https://pypi.org/pypi/{package_name}/json"
+                    response = requests.get(url)
+                    if response.status_code != 200:
+                        print(f"Error fetching {package_name}: {response.status_code}", file=sys.stderr)
+                        return None, None, None
+                    
+                    data = response.json()
+                    latest_version = data['info']['version']
+                else:
+                    # Use exact version
+                    latest_version = version_spec.strip('=')
+                
+                # Get specific version info
+                url = f"https://pypi.org/pypi/{package_name}/{latest_version}/json"
+                response = requests.get(url)
+                if response.status_code != 200:
+                    print(f"Error fetching {package_name} {latest_version}: {response.status_code}", file=sys.stderr)
+                    return None, None, None
+                
+                data = response.json()
+                
+                # Find source distribution
+                for file_info in data['urls']:
+                    if file_info['packagetype'] == 'sdist':
+                        return file_info['url'], file_info['digests']['sha256'], latest_version
+                
+                print(f"No source distribution found for {package_name} {latest_version}", file=sys.stderr)
+                return None, None, None
+                
+            except Exception as e:
+                print(f"Error processing {package_name}: {e}", file=sys.stderr)
+                return None, None, None
+        
+        # Parse dependencies from pyproject.toml
+        print("📋 Parsing dependencies from pyproject.toml...", file=sys.stderr)
+        dependencies = parse_pyproject_toml()
+        
+        if not dependencies:
+            print("❌ No dependencies found in pyproject.toml, falling back to hardcoded list", file=sys.stderr)
+            # Fallback to hardcoded dependencies
+            dependencies = [
+                ("click", "8.1.7"),
+                ("colorama", "0.4.6"),
+                ("azure-identity", "1.17.1"),
+                ("azure-core", "1.30.0"),
+                ("azure-mgmt-core", "1.4.0"),
+                ("msal", "1.31.0"),
+                ("requests", "2.32.3"),
+                ("certifi", "2024.8.30"),
+                ("charset-normalizer", "3.3.2"),
+                ("idna", "3.8"),
+                ("urllib3", "2.2.3"),
+                ("six", "1.16.0"),
+                ("cryptography", "43.0.1"),
+            ]
+        
+        print(f"📋 Found {len(dependencies)} dependencies to process", file=sys.stderr)
+        
+        resources = []
+        for name, version in dependencies:
+            print(f"🔍 Processing {name} {version}...", file=sys.stderr)
+            url, sha256, actual_version = get_package_info(name, version)
+            if url and sha256:
+                resources.append({
+                    'name': name,
+                    'url': url,
+                    'sha256': sha256,
+                    'version': actual_version
+                })
+                print(f"✓ {name} {actual_version}: {sha256[:16]}...", file=sys.stderr)
+            else:
+                print(f"✗ Failed to get info for {name} {version}", file=sys.stderr)
+        
+        # Output as JSON
+        print(json.dumps(resources))
+        EOF
+        
+        # Run the script and capture output
+        DEPS_JSON=$(python3 get_deps.py)
+        echo "dependencies_json<<EOF" >> $GITHUB_OUTPUT
+        echo "$DEPS_JSON" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "✅ Collected dependency information"
+    
+    - name: Checkout Homebrew tap repository
+      uses: actions/checkout@v4
+      with:
+        repository: naga-nandyala/homebrew-mycli-app
+        token: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
+        path: homebrew-tap
+        
+    - name: Update Homebrew formula for source installation
+      run: |
+        cd homebrew-tap
+        
+        VERSION="${{ steps.get_release.outputs.version }}"
+        SOURCE_SHA="${{ steps.calculate_hash.outputs.source_sha }}"
+        
+        # Create Formula directory if it doesn't exist
+        mkdir -p Formula
+        
+        # Parse dependencies JSON
+        DEPS_JSON='${{ steps.get_dependencies.outputs.dependencies_json }}'
+        
+        # Generate resource blocks
+        python3 << EOF > resources.rb
+        import json
+        
+        deps_json = '''$DEPS_JSON'''
+        dependencies = json.loads(deps_json)
+        
+        for dep in dependencies:
+            print(f'''  resource "{dep['name']}" do
+            url "{dep['url']}"
+            sha256 "{dep['sha256']}"
+          end
+        ''')
+        EOF
+        
+        # Create the complete formula
+        cat > Formula/mycli-app-src.rb << EOF
+        # Homebrew formula for mycli-app (source-based installation)
+        class MycliAppSrc < Formula
+          include Language::Python::Virtualenv
+
+          desc "Simple Azure-like CLI tool by Naga (Source Installation)"
+          homepage "https://github.com/naga-nandyala/mycli-app"
+          url "https://github.com/naga-nandyala/mycli-app/archive/refs/tags/v$VERSION.tar.gz"
+          sha256 "$SOURCE_SHA"
+          license "MIT"
+          head "https://github.com/naga-nandyala/mycli-app.git", branch: "main"
+
+          livecheck do
+            url :stable
+            regex(/^v?(\d+(?:\.\d+)+)$/i)
+            strategy :github_latest
+          end
+
+          bottle do
+            # Homebrew will generate these automatically when building bottles
+          end
+
+          depends_on "python@3.12"
+
+          # Build dependencies for cryptography
+          depends_on "rust" => :build
+          depends_on "pkgconf" => :build
+          depends_on "openssl@3"
+
+          uses_from_macos "libffi"
+
+        EOF
+        
+        # Append resource blocks
+        cat resources.rb >> Formula/mycli-app-src.rb
+        
+        # Append the rest of the formula
+        cat >> Formula/mycli-app-src.rb << 'EOF'
+
+          def install
+            # Ensure that the `openssl` crate picks up the intended library for cryptography
+            ENV["OPENSSL_DIR"] = Formula["openssl@3"].opt_prefix
+            ENV["OPENSSL_NO_VENDOR"] = "1"
+
+            # Create virtual environment
+            venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
+            
+            # Install all Python dependencies
+            venv.pip_install resources
+
+            # Install the main application
+            venv.pip_install buildpath
+
+            # Create the CLI wrapper script
+            (bin/"mycli").write <<~SHELL
+              #!/usr/bin/env bash
+              PYTHONPATH="#{libexec}/lib/python3.12/site-packages" #{libexec}/bin/python -m mycli_app.cli "$@"
+            SHELL
+
+            # Generate shell completions if supported
+            # generate_completions_from_executable(bin/"mycli", "--completion", base_name: "mycli")
+          end
+
+          test do
+            # Test basic functionality
+            assert_match version.to_s, shell_output("#{bin}/mycli --version")
+            
+            # Test help command
+            help_output = shell_output("#{bin}/mycli --help")
+            assert_match "Usage:", help_output
+            
+            # Test Azure-related functionality is available
+            assert_match "azure", help_output.downcase
+          end
+
+          def caveats
+            <<~EOS
+              This is the source-based installation of mycli-app, which builds from source
+              and manages dependencies through Homebrew's Python virtual environment system.
+              
+              Features:
+              - Built from source for maximum compatibility
+              - Dependencies managed by Homebrew
+              - Azure authentication with MSAL support
+              - Automatic updates through Homebrew
+              
+              Benefits of this approach:
+              - Smaller download size
+              - Better integration with system Python
+              - Easier dependency management
+              - Automatic security updates for dependencies
+              
+              To use Azure authentication features, run:
+                mycli --help
+                
+              For the alternative venv bundle version, install:
+                brew install naga-nandyala/mycli-app/mycli-app-venv
+                
+              For more information, visit:
+                https://github.com/naga-nandyala/mycli-app
+            EOS
+          end
+        end
+        EOF
+        
+        echo "✅ Source-based formula updated with version $VERSION"
+        echo "Source SHA256: $SOURCE_SHA"
+        
+        # Debug: Show the created file
+        echo "📋 Created formula file:"
+        ls -la Formula/mycli-app-src.rb
+        echo "📋 Formula file preview:"
+        head -30 Formula/mycli-app-src.rb
+        echo "..."
+        tail -10 Formula/mycli-app.rb
+        
+    - name: Commit and push formula update
+      run: |
+        cd homebrew-tap
+        
+        # Configure git
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        
+        # Debug: Show current state
+        echo "📋 Current directory and files:"
+        pwd
+        ls -la
+        echo "📋 Formula directory:"
+        ls -la Formula/
+        
+        # Check if there are changes (including untracked files)
+        echo "📋 Git status:"
+        git status --porcelain
+        if [[ -z "$(git status --porcelain)" ]]; then
+          echo "No changes to commit"
+          exit 0
+        fi
+        
+        VERSION="${{ steps.get_release.outputs.version }}"
+        
+        # Create commit message
+        if [ "${{ github.event_name }}" = "release" ]; then
+          COMMIT_MSG="Update mycli-app-src to version $VERSION (source installation)
+
+        Released: ${{ github.event.release.tag_name }}
+        - Source SHA256: ${{ steps.calculate_hash.outputs.source_sha }}
+        
+        This release uses the source-based approach with Homebrew managed dependencies.
+        Features:
+        - Built from source for maximum compatibility
+        - Dependencies managed by Homebrew's virtualenv system
+        - Automatic security updates for dependencies
+        
+        Automated update from release workflow"
+        else
+          COMMIT_MSG="Update mycli-app-src to version $VERSION (source installation)
+
+        - Source SHA256: ${{ steps.calculate_hash.outputs.source_sha }}
+        
+        This release uses the source-based approach with Homebrew managed dependencies.
+        Features:
+        - Built from source for maximum compatibility
+        - Dependencies managed by Homebrew's virtualenv system
+        - Automatic security updates for dependencies
+        
+        Automated update (manual trigger)"
+        fi
+        
+        # Commit and push changes
+        git add Formula/mycli-app-src.rb
+        git commit -m "$COMMIT_MSG"
+        git push origin main
+        
+        echo "✅ Homebrew tap updated successfully for source installation!"
+      env:
+        GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
