@@ -96,8 +96,10 @@ jobs:
                 
                 # Get main dependencies
                 main_deps = data.get('project', {}).get('dependencies', [])
+                print(f"📋 Found main dependencies: {main_deps}", file=sys.stderr)
                 for dep in main_deps:
                     name, version = parse_dependency_spec(dep)
+                    print(f"📋 Parsed main dep '{dep}' -> name='{name}', version='{version}'", file=sys.stderr)
                     if name and version:
                         dependencies.append((name, version))
                 
@@ -105,8 +107,10 @@ jobs:
                 optional_deps = data.get('project', {}).get('optional-dependencies', {})
                 for group_name in ['azure', 'broker']:
                     if group_name in optional_deps:
+                        print(f"📋 Found {group_name} dependencies: {optional_deps[group_name]}", file=sys.stderr)
                         for dep in optional_deps[group_name]:
                             name, version = parse_dependency_spec(dep)
+                            print(f"📋 Parsed {group_name} dep '{dep}' -> name='{name}', version='{version}'", file=sys.stderr)
                             if name and version:
                                 # Avoid duplicates
                                 if (name, version) not in dependencies:
@@ -119,34 +123,41 @@ jobs:
                 return []
         
         def parse_dependency_spec(dep_spec):
-            """Parse dependency specification like 'click>=8.0.0' or 'azure-identity>=1.12.0'"""
-            # Handle different version specifiers
-            if '>=' in dep_spec:
-                name, version = dep_spec.split('>=', 1)
-                return name.strip(), version.strip()
-            elif '==' in dep_spec:
-                name, version = dep_spec.split('==', 1)
-                return name.strip(), version.strip()
-            elif '>' in dep_spec:
-                name, version = dep_spec.split('>', 1)
-                return name.strip(), version.strip()
-            elif '[' in dep_spec:
-                # Handle extras like 'msal[broker]>=1.20.0,<2'
-                match = re.match(r'^([^[]+)(?:\[[^\]]+\])?(.*)', dep_spec)
+            """Parse dependency specification like 'click>=8.0.0' or 'azure-identity>=1.12.0' or 'msal[broker]>=1.20.0,<2'"""
+            # First, handle extras by extracting the base package name
+            if '[' in dep_spec:
+                # Extract package name without extras: 'msal[broker]>=1.20.0,<2' -> 'msal' and '>=1.20.0,<2'
+                match = re.match(r'^([^[]+)(?:\[[^\]]+\])?(.*)$', dep_spec)
                 if match:
-                    name = match.group(1).strip()
+                    base_name = match.group(1).strip()
                     version_part = match.group(2).strip()
+                    # Now parse the version part
                     if '>=' in version_part:
                         version = version_part.split('>=')[1].split(',')[0].strip()
-                        return name, version
+                        return base_name, version
                     elif '==' in version_part:
                         version = version_part.split('==')[1].split(',')[0].strip()
-                        return name, version
+                        return base_name, version
+                    elif '>' in version_part:
+                        version = version_part.split('>')[1].split(',')[0].strip()
+                        return base_name, version
+                    else:
+                        # No version specified with extras
+                        return base_name, "latest"
+            
+            # Handle normal dependencies without extras
+            if '>=' in dep_spec:
+                name, version = dep_spec.split('>=', 1)
+                return name.strip(), version.split(',')[0].strip()  # Handle comma-separated constraints
+            elif '==' in dep_spec:
+                name, version = dep_spec.split('==', 1)
+                return name.strip(), version.split(',')[0].strip()
+            elif '>' in dep_spec:
+                name, version = dep_spec.split('>', 1)
+                return name.strip(), version.split(',')[0].strip()
             else:
                 # Just package name, get latest
                 return dep_spec.strip(), "latest"
-            
-            return None, None
         
         def get_package_info(package_name, version_spec):
             """Get PyPI package download URL and SHA256 hash for latest compatible version"""
