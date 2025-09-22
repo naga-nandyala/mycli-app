@@ -143,10 +143,6 @@ jobs:
             echo "    For the PyInstaller variant use:"
             echo "      brew install naga-nandyala/mycli-app/mycli-app"
             echo "  EOS"
-            echo ""
-            echo "  test do"
-            echo "    assert_match \"MyCliApp version\", shell_output(\"mycli --version\")"
-            echo "  end"
             echo "end"
           } > Casks/mycli-app-venv.rb
 
