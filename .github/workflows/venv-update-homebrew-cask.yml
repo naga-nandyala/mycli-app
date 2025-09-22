@@ -148,17 +148,30 @@ jobs:
 
           echo "Generated cask file:" && head -40 Casks/mycli-app-venv.rb
 
+      - name: Show pending diff (for debugging)
+        run: |
+          cd homebrew-tap
+          # Add as intent-to-add so diff shows if new
+          git add -N Casks/mycli-app-venv.rb || true
+          echo "--- BEGIN DIFF ---"
+          git diff --color=always Casks/mycli-app-venv.rb || true
+          echo "--- END DIFF ---"
+
       - name: Commit & push cask update
         run: |
           cd homebrew-tap
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          if git diff --quiet && git diff --cached --quiet; then
-            echo "No changes to commit"; exit 0; fi
           VERSION="${{ steps.get_version.outputs.version }}"
+          # Stage file (again, safe even if already staged)
           git add Casks/mycli-app-venv.rb
+          if git diff --cached --quiet; then
+            echo "No changes to commit (cask already up to date for version $VERSION)"
+            exit 0
+          fi
+          echo "Committing updated cask for version $VERSION"
           git commit -m "Update cask mycli-app-venv to version $VERSION (auto-generated)"
           git push origin main
-          echo "✅ Cask updated"
+          echo "✅ Cask updated and pushed"
         env:
           GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.GITHUB_TOKEN }}
