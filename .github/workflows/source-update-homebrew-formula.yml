@@ -666,7 +666,7 @@ jobs:
             ENV["OPENSSL_NO_VENDOR"] = "1"
 
             # Create virtual environment
-            venv = virtualenv_create(libexec, "python3.10", system_site_packages: false)
+            venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
             
             # Install source-available dependencies first (excluding binary wheels)
             # This follows the AWS CLI pattern for handling binary-only packages
