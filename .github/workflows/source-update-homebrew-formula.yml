@@ -1,4 +1,4 @@
-name: Source Installation - Update Homebrew Formula
+name: src style Installation - Update Homebrew Formula
 
 # This workflow automatically updates the Homebrew formula for source-based installation
 # when a new release is published or when manually triggered.
