@@ -110,20 +110,22 @@ jobs:
                         if extras:
                             packages_with_extras.append((name, version, extras))
                 
-                # Get optional dependencies (azure, broker groups)
+                # Get optional dependencies (azure, broker groups) - include ALL for complete installation
                 optional_deps = data.get('project', {}).get('optional-dependencies', {})
-                for group_name in ['azure', 'broker']:
-                    if group_name in optional_deps:
-                        print(f"📋 Found {group_name} dependencies: {optional_deps[group_name]}", file=sys.stderr)
-                        for dep in optional_deps[group_name]:
-                            name, version, extras = parse_dependency_spec(dep)
-                            print(f"📋 Parsed {group_name} dep '{dep}' -> name='{name}', version='{version}', extras='{extras}'", file=sys.stderr)
-                            if name and version:
-                                # Avoid duplicates
-                                if (name, version) not in dependencies:
-                                    dependencies.append((name, version))
-                                if extras and (name, version, extras) not in packages_with_extras:
-                                    packages_with_extras.append((name, version, extras))
+                print(f"📋 Available optional dependency groups: {list(optional_deps.keys())}", file=sys.stderr)
+                
+                # Include ALL optional dependency groups for complete functionality
+                for group_name, group_deps in optional_deps.items():
+                    print(f"📋 Processing {group_name} dependencies: {group_deps}", file=sys.stderr)
+                    for dep in group_deps:
+                        name, version, extras = parse_dependency_spec(dep)
+                        print(f"📋 Parsed {group_name} dep '{dep}' -> name='{name}', version='{version}', extras='{extras}'", file=sys.stderr)
+                        if name and version:
+                            # Avoid duplicates
+                            if (name, version) not in dependencies:
+                                dependencies.append((name, version))
+                            if extras and (name, version, extras) not in packages_with_extras:
+                                packages_with_extras.append((name, version, extras))
                 
                 return dependencies, packages_with_extras
                 
@@ -413,8 +415,9 @@ jobs:
                 dependencies = result
                 packages_with_extras = []
         
-        if not dependencies:
-            print("❌ No dependencies found via any method, falling back to hardcoded list", file=sys.stderr)
+        # Check if we have enough dependencies (should have at least 15+ for a complete Azure CLI)
+        if not dependencies or len(dependencies) < 10:
+            print(f"❌ Insufficient dependencies found ({len(dependencies) if dependencies else 0}), using hardcoded complete list", file=sys.stderr)
             # Fallback to hardcoded dependencies with broker support
             dependencies = [
                 ("click", "8.1.7"),
@@ -438,11 +441,29 @@ jobs:
                 ("typing_extensions", "4.12.2"),  # Python compatibility
             ]
             packages_with_extras = []
-        elif not any(dep[0] == "pymsalruntime" for dep in dependencies):
-            # Even if we got dependencies but missing pymsalruntime, add it explicitly
-            print("⚠️  pymsalruntime missing from resolved dependencies, adding explicitly for broker support", file=sys.stderr)
-            dependencies.append(("pymsalruntime", "latest"))
-            print("✅ Added pymsalruntime for broker authentication support", file=sys.stderr)
+        else:
+            # We have some dependencies, but ensure critical broker dependencies are included
+            broker_deps_needed = ["msal", "azure-identity", "azure-core", "msal-extensions", "pymsalruntime"]
+            missing_broker_deps = []
+            
+            for broker_dep in broker_deps_needed:
+                if not any(dep[0] == broker_dep for dep in dependencies):
+                    missing_broker_deps.append(broker_dep)
+            
+            if missing_broker_deps:
+                print(f"⚠️  Missing critical broker dependencies: {missing_broker_deps}", file=sys.stderr)
+                print("🔐 Adding missing broker dependencies for complete authentication support", file=sys.stderr)
+                
+                # Add missing broker dependencies with latest versions
+                for missing_dep in missing_broker_deps:
+                    dependencies.append((missing_dep, "latest"))
+                    print(f"➕ Added missing dependency: {missing_dep}", file=sys.stderr)
+            
+            # Ensure pymsalruntime is present for broker support
+            if not any(dep[0] == "pymsalruntime" for dep in dependencies):
+                print("⚠️  pymsalruntime missing, adding for broker support", file=sys.stderr)
+                dependencies.append(("pymsalruntime", "latest"))
+                print("✅ Added pymsalruntime for broker authentication support", file=sys.stderr)
         
         print(f"📋 Final dependency count: {len(dependencies)}", file=sys.stderr)
         print(f"🎯 Packages with extras to process: {len(packages_with_extras)}", file=sys.stderr)
