@@ -9,6 +9,14 @@ on:
         description: 'Version to update cask for (e.g., 1.0.0). Leave empty to use latest release.'
         required: false
         type: string
+      force_format_refresh:
+        description: 'Force commit even if same version/content (adds timestamp comment)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: write
@@ -147,6 +155,11 @@ jobs:
           sed -i "s/__ARM64_FILE__/$ARM64_FILE/g" Casks/mycli-app-venv.rb
           sed -i "s/__X64_FILE__/$X86_FILE/g" Casks/mycli-app-venv.rb
 
+          # If forcing refresh, append a timestamp comment so there is a diff
+          if [ "${{ github.event.inputs.force_format_refresh }}" = "true" ]; then
+            echo "# Regenerated: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> Casks/mycli-app-venv.rb
+          fi
+
           # Sanity check: ensure "cask \"mycli-app-venv\" do" is on a single line
           if ! grep -q '^ *cask "mycli-app-venv" do$' Casks/mycli-app-venv.rb; then
             echo 'ERROR: cask header malformed after substitution:' >&2
@@ -179,8 +192,13 @@ jobs:
           # Stage file (again, safe even if already staged)
           git add Casks/mycli-app-venv.rb
           if git diff --cached --quiet; then
-            echo "No changes to commit (cask already up to date for version $VERSION)"
-            exit 0
+            if [ "${{ github.event.inputs.force_format_refresh }}" = "true" ]; then
+              echo "Force refresh requested but still no diff (unexpected). Showing file head:";
+              head -30 Casks/mycli-app-venv.rb; exit 0;
+            else
+              echo "No changes to commit (cask already up to date for version $VERSION)";
+              exit 0;
+            fi
           fi
           echo "Committing updated cask for version $VERSION"
           git commit -m "Update cask mycli-app-venv to version $VERSION (auto-generated)"
