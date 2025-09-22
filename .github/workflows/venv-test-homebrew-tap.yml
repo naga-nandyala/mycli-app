@@ -16,9 +16,9 @@ on:
         required: false
         type: string
   
-  # Test on schedule (weekly)
-  schedule:
-    - cron: '0 11 * * 1'  # Every Monday at 11 AM UTC (1 hour after PyInstaller test)
+  # # Test on schedule (weekly)
+  # schedule:
+  #   - cron: '0 11 * * 1'  # Every Monday at 11 AM UTC (1 hour after PyInstaller test)
 
 jobs:
   test-venv-homebrew:

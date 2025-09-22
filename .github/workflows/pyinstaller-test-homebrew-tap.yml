@@ -13,9 +13,9 @@ on:
         required: false
         type: string
   
-  # Test on schedule (weekly)
-  schedule:
-    - cron: '0 10 * * 1'  # Every Monday at 10 AM UTC
+  # # Test on schedule (weekly)
+  # schedule:
+  #   - cron: '0 10 * * 1'  # Every Monday at 10 AM UTC
 
 jobs:
   test-homebrew-tap:

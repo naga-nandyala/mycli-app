@@ -1,4 +1,4 @@
-name: Test AWS CLI-Style Homebrew Formula
+name: src style - Test Homebrew Tap
 
 # This workflow tests the enhanced source-based Homebrew formula (mycli-app-src)
 # It verifies the AWS CLI-style approach for handling binary wheels (pymsalruntime)
