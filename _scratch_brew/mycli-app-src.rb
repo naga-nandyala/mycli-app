@@ -137,17 +137,8 @@ class MycliAppSrc < Formula
     venv.pip_install resources.reject { |r| r.name == "pymsalruntime" }
 
     # Install pymsalruntime binary wheel separately using direct wheel installation
-    # This bypasses the --no-binary restriction for this specific package
     if resources.any? { |r| r.name == "pymsalruntime" }
-      resource("pymsalruntime").stage do
-        # Find the wheel file and install it directly
-        wheel_file = Dir["*.whl"].first
-        if wheel_file
-          system libexec/"bin/pip", "install", "--no-deps", wheel_file
-        else
-          opoo "pymsalruntime wheel file not found, broker support may be limited"
-        end
-      end
+      system libexec/"bin/pip", "install", "--no-deps", resource("pymsalruntime").cached_download
     end
 
     # Install the main application
