@@ -252,7 +252,10 @@ jobs:
                     base_name = match.group(1).strip()
                     extras = match.group(2).strip()
                     version_part = match.group(3).strip()
-                    # Now parse the version part
+                    
+                    print(f"🔍 Parsing extras: '{dep_spec}' -> base='{base_name}', extras='{extras}', version='{version_part}'", file=sys.stderr)
+                    
+                    # Now parse the version part (handle constraints like >=1.20.0,<2)
                     if '>=' in version_part:
                         version = version_part.split('>=')[1].split(',')[0].strip()
                         return base_name, version, extras
@@ -263,7 +266,8 @@ jobs:
                         version = version_part.split('>')[1].split(',')[0].strip()
                         return base_name, version, extras
                     else:
-                        # No version specified with extras
+                        # No version specified with extras, use latest
+                        print(f"🔍 No version constraint found, using 'latest' for {base_name}[{extras}]", file=sys.stderr)
                         return base_name, "latest", extras
             
             # Handle normal dependencies without extras
@@ -392,7 +396,7 @@ jobs:
                 ("azure-mgmt-core", "1.4.0"),
                 ("msal", "1.31.0"),
                 ("msal-extensions", "1.3.1"),  # Broker support
-                ("pymsalruntime", "0.14.2"),  # Key broker dependency
+                ("pymsalruntime", "0.14.2"),  # Key broker dependency - CRITICAL for native authentication
                 ("requests", "2.32.3"),
                 ("certifi", "2024.8.30"),
                 ("charset-normalizer", "3.3.2"),
@@ -406,6 +410,11 @@ jobs:
                 ("typing_extensions", "4.12.2"),  # Python compatibility
             ]
             packages_with_extras = []
+        elif not any(dep[0] == "pymsalruntime" for dep in dependencies):
+            # Even if we got dependencies but missing pymsalruntime, add it explicitly
+            print("⚠️  pymsalruntime missing from resolved dependencies, adding explicitly for broker support", file=sys.stderr)
+            dependencies.append(("pymsalruntime", "latest"))
+            print("✅ Added pymsalruntime for broker authentication support", file=sys.stderr)
         
         print(f"📋 Final dependency count: {len(dependencies)}", file=sys.stderr)
         print(f"🎯 Packages with extras to process: {len(packages_with_extras)}", file=sys.stderr)
