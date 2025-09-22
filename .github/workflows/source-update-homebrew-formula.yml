@@ -250,6 +250,76 @@ jobs:
         
         echo "✅ Collected dependency information"
     
+    - name: Verify collected dependencies
+      run: |
+        echo "📋 Verification: Checking collected dependencies..."
+        
+        # Parse the collected dependencies JSON to verify what we gathered
+        DEPS_JSON='${{ steps.get_dependencies.outputs.dependencies_json }}'
+        
+        echo "📦 Dependencies that will be included in the formula:"
+        echo "$DEPS_JSON" | python3 -c "
+        import json
+        import sys
+        
+        try:
+            deps = json.load(sys.stdin)
+            print(f'Total dependencies: {len(deps)}')
+            print('=' * 50)
+            for i, dep in enumerate(deps, 1):
+                print(f'{i:2d}. {dep[\"name\"]:20} v{dep[\"version\"]:15} SHA: {dep[\"sha256\"][:16]}...')
+            print('=' * 50)
+            
+            # Check for specific broker-related packages
+            broker_packages = ['msal', 'pymsalruntime', 'azure-identity']
+            print('🔍 Broker functionality packages:')
+            for pkg in broker_packages:
+                found = next((d for d in deps if d['name'] == pkg), None)
+                if found:
+                    print(f'  ✅ {pkg}: v{found[\"version\"]}')
+                else:
+                    print(f'  ❌ {pkg}: NOT FOUND')
+            
+            # Show URL sources for verification
+            print()
+            print('🌐 Package sources:')
+            for dep in deps:
+                source_type = 'PyPI' if 'files.pythonhosted.org' in dep['url'] else 'Other'
+                print(f'  • {dep[\"name\"]}: {source_type}')
+                
+        except Exception as e:
+            print(f'Error parsing dependencies: {e}')
+            sys.exit(1)
+        "
+        
+        echo ""
+        echo "🔍 Checking if pyproject.toml broker extras are properly handled..."
+        
+        # Show the broker dependencies from pyproject.toml for comparison
+        python3 -c "
+        import tomli
+        
+        try:
+            with open('pyproject.toml', 'rb') as f:
+                data = tomli.load(f)
+            
+            broker_deps = data.get('project', {}).get('optional-dependencies', {}).get('broker', [])
+            print('📋 Broker dependencies from pyproject.toml:')
+            for dep in broker_deps:
+                print(f'  • {dep}')
+            
+            if 'msal[broker]' in str(broker_deps):
+                print('✅ msal[broker] found in pyproject.toml - extras should be handled')
+            else:
+                print('ℹ️  No msal[broker] found, checking for msal with broker extras...')
+                
+        except Exception as e:
+            print(f'Error reading pyproject.toml: {e}')
+        "
+        
+        echo ""
+        echo "✅ Dependency verification completed"
+    
     - name: Checkout Homebrew tap repository
       uses: actions/checkout@v4
       with:
