@@ -320,7 +320,19 @@ jobs:
                 if package_name == 'pymsalruntime':
                     print(f"🔍 {package_name} is a binary wheel package (like AWS CLI's awscrt)", file=sys.stderr)
                     print(f"   Will be handled with selective pip install during formula build", file=sys.stderr)
-                    # Find the wheel distribution instead
+                    # Find the wheel distribution - prefer cp312 for Python 3.12 compatibility
+                    for file_info in data['urls']:
+                        if (file_info['packagetype'] == 'bdist_wheel' and 
+                            'cp312' in file_info['filename'] and 
+                            'macos' in file_info['filename'].lower()):
+                            print(f"✅ Found cp312 macOS wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
+                            return file_info['url'], file_info['digests']['sha256'], latest_version
+                    # If no cp312 macOS wheel, try any cp312 wheel
+                    for file_info in data['urls']:
+                        if file_info['packagetype'] == 'bdist_wheel' and 'cp312' in file_info['filename']:
+                            print(f"✅ Found cp312 wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
+                            return file_info['url'], file_info['digests']['sha256'], latest_version
+                    # Fallback to any macOS wheel
                     for file_info in data['urls']:
                         if file_info['packagetype'] == 'bdist_wheel' and 'macos' in file_info['filename'].lower():
                             print(f"✅ Found macOS wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
@@ -412,7 +424,7 @@ jobs:
                 ("azure-mgmt-core", "1.4.0"),
                 ("msal", "1.31.0"),
                 ("msal-extensions", "1.3.1"),  # Broker support
-                ("pymsalruntime", "0.14.2"),  # Key broker dependency - CRITICAL for native authentication
+                ("pymsalruntime", "0.18.1"),  # Key broker dependency - CRITICAL for native authentication
                 ("requests", "2.32.3"),
                 ("certifi", "2024.8.30"),
                 ("charset-normalizer", "3.3.2"),
@@ -654,7 +666,7 @@ jobs:
             ENV["OPENSSL_NO_VENDOR"] = "1"
 
             # Create virtual environment
-            venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
+            venv = virtualenv_create(libexec, "python3.10", system_site_packages: false)
             
             # Install source-available dependencies first (excluding binary wheels)
             # This follows the AWS CLI pattern for handling binary-only packages
@@ -662,7 +674,7 @@ jobs:
 
             # Install pymsalruntime binary wheel separately using direct wheel installation
             if resources.any? { |r| r.name == "pymsalruntime" }
-              system libexec/"bin/pip", "install", "--no-deps", resource("pymsalruntime").cached_download
+              system venv.root/"bin/pip", "install", "--no-deps", resource("pymsalruntime").cached_download
             end
 
             # Install the main application
