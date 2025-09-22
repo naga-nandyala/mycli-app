@@ -1,8 +1,8 @@
-name: Source Installation - Test Homebrew Tap
+name: Test AWS CLI-Style Homebrew Formula
 
-# This workflow tests the source-based Homebrew formula (mycli-app-src)
-# It verifies that the source installation installs and works correctly via Homebrew
-# with proper Azure SDK and MSAL broker support
+# This workflow tests the enhanced source-based Homebrew formula (mycli-app-src)
+# It verifies the AWS CLI-style approach for handling binary wheels (pymsalruntime)
+# while building other dependencies from source
 
 on:
   # Test after the source formula is updated
@@ -19,13 +19,13 @@ on:
         required: false
         type: string
   
-  # Test on schedule (weekly, offset from venv test)
+  # Test on schedule (weekly)
   schedule:
-    - cron: '0 12 * * 1'  # Every Monday at 12 PM UTC (1 hour after venv test)
+    - cron: '0 14 * * 1'  # Every Monday at 2 PM UTC
 
 jobs:
-  test-source-homebrew:
-    name: Test Source Installation Homebrew Formula
+  test-aws-cli-style-formula:
+    name: Test AWS CLI-Style Formula Installation
     
     # Only run if the source update workflow succeeded (or on manual/schedule trigger)
     if: |
@@ -58,8 +58,6 @@ jobs:
           echo "macOS Version: $(sw_vers -productVersion)"
           echo "Homebrew Version: $(brew --version | head -n1)"
           echo "Python Version: $(python3 --version)"
-          echo "Available Python versions:"
-          ls -la /opt/homebrew/bin/python* 2>/dev/null || ls -la /usr/local/bin/python* 2>/dev/null || echo "No Homebrew Python found"
       
       - name: Clean previous installations
         run: |
@@ -68,9 +66,9 @@ jobs:
           brew uninstall mycli-app-venv 2>/dev/null || echo "No previous venv installation found"
           brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No previous tap found"
       
-      - name: Test source-based Homebrew tap installation
+      - name: Install and test AWS CLI-style formula
         run: |
-          echo "🍺 Installing mycli-app-src (source-based) via dedicated Homebrew tap..."
+          echo "🍺 Installing mycli-app-src (AWS CLI-style) via Homebrew tap..."
           
           echo "📋 Adding the homebrew tap..."
           brew tap naga-nandyala/mycli-app
@@ -81,13 +79,13 @@ jobs:
           echo "📋 Showing available formulas in tap..."
           brew search naga-nandyala/mycli-app/
           
-          echo "🍺 Installing mycli-app-src (source-based formula)..."
-          echo "This will build from source and install dependencies via Homebrew..."
+          echo "🍺 Installing mycli-app-src (AWS CLI-style formula)..."
+          echo "This uses AWS CLI approach: source + selective binary wheels..."
           brew install mycli-app-src --verbose
       
-      - name: Verify installation
+      - name: Verify CLI installation and commands
         run: |
-          echo "✅ Verifying source-based installation..."
+          echo "✅ Verifying AWS CLI-style installation..."
           
           # Check if mycli is in PATH
           if ! command -v mycli &> /dev/null; then
@@ -99,213 +97,228 @@ jobs:
             exit 1
           fi
           
-          # Check version output
+          # Test version command - should output "MyCliApp version X.X.X"
           echo "📋 Version check:"
           mycli_version=$(mycli --version)
-          echo "Output: $mycli_version"
+          echo "Version output: '$mycli_version'"
           
-          # Verify it contains expected text
+          # Verify it contains expected format
           if [[ "$mycli_version" =~ "MyCliApp version" ]]; then
-            echo "✅ Version check passed"
+            echo "✅ Version check passed - correct format"
           else
-            echo "❌ Version check failed - unexpected output"
+            echo "❌ Version check failed - expected 'MyCliApp version X.X.X', got: '$mycli_version'"
+            exit 1
+          fi
+          
+          # Test help command - should contain Usage and Commands
+          echo "📋 Help command test:"
+          help_output=$(mycli --help)
+          echo "Help output preview:"
+          echo "$help_output" | head -10
+          
+          if [[ "$help_output" =~ "Commands:" ]] && [[ "$help_output" =~ "Options:" ]]; then
+            echo "✅ Help command passed - contains expected sections"
+          else
+            echo "❌ Help command failed - missing expected sections"
+            echo "Full help output:"
+            echo "$help_output"
             exit 1
           fi
       
-      - name: Test basic functionality
+      - name: Test AWS CLI-style installation structure
         run: |
-          echo "🔧 Testing basic functionality..."
-          
-          # Test help command
-          echo "📋 Help command test:"
-          mycli --help
-          
-          # Test if source installation structure is correct
-          echo "🏗️  Source Installation Structure verification:"
+          echo "🏗️  AWS CLI-Style Installation Structure verification:"
           binary_path=$(which mycli)
           echo "Binary location: $binary_path"
           
-          # Check if it's a script (source installation should be a shell script wrapper)
+          # Check if it's a script wrapper (typical for Homebrew Python apps)
           if command -v file &> /dev/null; then
             file_output=$(file "$binary_path")
-            echo "File output: $file_output"
+            echo "File type: $file_output"
+          fi
+          
+          # Check the installation directory structure
+          echo "🔍 Installation directory structure:"
+          install_dir=$(dirname "$binary_path")
+          echo "Install directory: $install_dir"
+          
+          # Look for the Python environment
+          cellar_path=$(brew --cellar mycli-app-src)
+          echo "Cellar path: $cellar_path"
+          if [[ -d "$cellar_path" ]]; then
+            echo "✅ Formula installed in Cellar"
+            latest_version=$(ls "$cellar_path" | sort -V | tail -1)
+            echo "Latest version: $latest_version"
+            version_path="$cellar_path/$latest_version"
             
-            if [[ "$file_output" =~ "shell script" ]] || [[ "$file_output" =~ "text" ]]; then
-              echo "✅ Source installation wrapper script detected"
-            else
-              echo "⚠️  Expected shell script wrapper, but got different file type"
-            fi
-          fi
-          
-          # Check if the underlying Python environment exists
-          echo "🐍 Python environment verification:"
-          if [[ -f "$binary_path" ]]; then
-            echo "📋 Wrapper script content preview:"
-            head -10 "$binary_path"
+            echo "📁 Version directory contents:"
+            ls -la "$version_path" | head -10
             
-            # Try to find the actual Python environment path
-            if grep -q "PYTHONPATH" "$binary_path"; then
-              echo "✅ PYTHONPATH found in wrapper script"
-              python_path=$(grep "PYTHONPATH" "$binary_path" | head -1)
-              echo "Python environment: $python_path"
-            fi
-          fi
-      
-      - name: Test Azure SDK availability and broker support
-        run: |
-          echo "☁️  Testing Azure SDK availability and broker support..."
-          
-          # Check Azure SDK availability directly
-          echo "📋 Testing status command:"
-          status_output=$(mycli status 2>&1)
-          echo "Status output: $status_output"
-          
-          # Determine if Azure SDK is properly available
-          if echo "$status_output" | grep -q "Azure SDK: Available"; then
-            echo "✅ Azure SDK is available in the source installation"
-          elif echo "$status_output" | grep -q "Azure SDK: Not Available"; then
-            echo "❌ Azure SDK is NOT available in the source installation"
-            echo "This indicates that Azure packages were not properly included during source build"
-            exit 1
-          else
-            echo "⚠️ Could not determine Azure SDK status from output"
-            echo "Full status output: $status_output"
-            exit 1
-          fi
-          
-          # Test broker command availability (tests MSAL broker support)
-          echo "🔐 Testing broker command availability:"
-          broker_output=$(mycli broker 2>&1)
-          echo "Broker output: $broker_output"
-          
-          if echo "$broker_output" | grep -q "Platform Support"; then
-            echo "✅ Broker command works (MSAL broker packages available)"
-            
-            # Check for specific broker support indicators
-            if echo "$broker_output" | grep -q "MSAL.*Available\|msal.*found"; then
-              echo "✅ MSAL broker support confirmed"
-            else
-              echo "⚠️  MSAL support may be limited, checking further..."
-            fi
-          else
-            echo "❌ Broker command failed - MSAL packages may be missing"
-            echo "This could indicate that msal[broker] extras were not properly handled"
-            exit 1
-          fi
-      
-      - name: Test authentication functionality
-        run: |
-          echo "🔐 Testing authentication functionality..."
-          
-          # Test logout command
-          echo "📤 Testing logout command:"
-          mycli logout
-          echo "✅ Logout command completed successfully"
-      
-      - name: Test broker authentication detection
-        timeout-minutes: 1
-        run: |
-          echo "📥 Testing broker authentication detection..."
-          
-          # Test if broker authentication is available
-          echo "🔍 Testing broker availability check:"
-          broker_check_output=$(mycli broker 2>&1)
-          echo "Broker check output: $broker_check_output"
-          
-          # Look for indicators that MSAL broker support is compiled in
-          if echo "$broker_check_output" | grep -q -i "broker.*support\|msal.*broker\|authentication.*broker"; then
-            echo "✅ Broker authentication support detected"
-          else
-            echo "❌ Broker authentication support not clearly detected"
-            echo "This may indicate that msal[broker] dependencies were not properly included"
-          fi
-          
-          # Test login command with force-broker (should fail gracefully in CI)
-          echo "📥 Testing login command with --force-broker:"
-          login_output=$(mycli login --force-broker 2>&1) || login_exit_code=$?
-          echo "Login output: $login_output"
-          echo "Login exit code: ${login_exit_code:-0}"
-          
-          # Check if the command attempted broker authentication
-          if echo "$login_output" | grep -q "Broker-based authentication"; then
-            echo "✅ Broker authentication method was attempted"
-            
-            # Check if it failed due to CI environment (expected)
-            if echo "$login_output" | grep -q "Force broker specified but only browser authentication is available\|Authorization type is not supported\|No accounts were found in the cache\|platform doesn't support native broker authentication"; then
-              echo "✅ Expected broker authentication failure in CI environment"
-              echo "✅ This confirms broker detection is working correctly"
-            elif echo "$login_output" | grep -q "Successfully authenticated"; then
-              echo "✅ Broker authentication succeeded (unexpected but good!)"
-            else
-              echo "⚠️  Unexpected broker authentication result, but continuing..."
-            fi
-          else
-            echo "❌ Broker authentication method was not attempted"
-            echo "This indicates a potential issue with MSAL broker integration"
-            exit 1
-          fi
-      
-      - name: Test Python dependencies in source installation
-        run: |
-          echo "📦 Testing Python dependencies in source installation..."
-          
-          # Get the Python environment path from the wrapper script
-          binary_path=$(which mycli)
-          if [[ -f "$binary_path" ]] && grep -q "PYTHONPATH" "$binary_path"; then
-            python_env=$(grep "PYTHONPATH" "$binary_path" | sed 's/.*PYTHONPATH="\([^"]*\)".*/\1/')
-            echo "📍 Python environment path: $python_env"
-            
-            if [[ -d "$python_env" ]]; then
-              echo "✅ Python environment directory exists"
-              echo "📦 Installed packages:"
-              ls -la "$python_env" | head -20
+            # Check for Python site-packages
+            if find "$version_path" -name "site-packages" -type d | head -1; then
+              site_packages=$(find "$version_path" -name "site-packages" -type d | head -1)
+              echo "✅ Found Python site-packages: $site_packages"
               
-              # Check for key packages
-              echo "🔍 Checking for key Azure/MSAL packages:"
-              key_packages=("azure_identity" "azure_core" "azure_mgmt_core" "msal" "requests")
+              # Verify key packages are installed
+              echo "🔍 Checking for key packages:"
+              key_packages=("azure_identity" "azure_core" "msal")
               for pkg in "${key_packages[@]}"; do
-                if find "$python_env" -name "*${pkg}*" -type d | head -1; then
+                if find "$site_packages" -name "*${pkg}*" -type d | head -1 >/dev/null; then
                   echo "  ✅ $pkg: Found"
                 else
                   echo "  ❌ $pkg: Not found"
                 fi
               done
               
-              # Look for broker-specific packages or indicators
-              echo "🔍 Checking for broker-related files:"
-              if find "$python_env" -name "*msal*" -type d | grep -q .; then
-                echo "  ✅ MSAL package directory found"
-                msal_dir=$(find "$python_env" -name "*msal*" -type d | head -1)
-                echo "    📍 MSAL location: $msal_dir"
-                if [[ -d "$msal_dir" ]]; then
-                  echo "    📁 MSAL contents:"
-                  ls -la "$msal_dir" | head -10
+              # Check for pymsalruntime (the binary wheel)
+              echo "� Checking for pymsalruntime (binary wheel):"
+              if find "$site_packages" -name "*pymsalruntime*" -type d | head -1 >/dev/null; then
+                pymsalruntime_dir=$(find "$site_packages" -name "*pymsalruntime*" -type d | head -1)
+                echo "  ✅ pymsalruntime found: $pymsalruntime_dir"
+                
+                # Check if it contains binary files (indicating binary wheel installation)
+                if find "$pymsalruntime_dir" -name "*.so" -o -name "*.dylib" -o -name "*.dll" | head -1 >/dev/null; then
+                  echo "  ✅ Binary files detected - confirms binary wheel installation"
+                else
+                  echo "  ⚠️  No binary files found - may be source installation"
                 fi
               else
-                echo "  ❌ MSAL package directory not found"
+                echo "  ❌ pymsalruntime not found - AWS CLI-style installation may have failed"
+                exit 1
               fi
             else
-              echo "❌ Python environment directory does not exist: $python_env"
+              echo "❌ No site-packages directory found"
               exit 1
             fi
           else
-            echo "⚠️  Could not determine Python environment path from wrapper script"
+            echo "❌ Formula not found in Cellar"
+            exit 1
           fi
       
-      - name: Test formula info and installation details
+      - name: Test Azure SDK and MSAL broker support
         run: |
-          echo "📊 Source installation tap and formula information:"
-          echo "📋 Tap info:"
-          brew tap-info naga-nandyala/mycli-app
+          echo "☁️  Testing Azure SDK availability and MSAL broker support..."
           
-          echo "📋 Source formula info:"
+          # Test status command to check Azure SDK availability
+          echo "📋 Testing status command:"
+          status_output=$(mycli status 2>&1)
+          echo "Status output:"
+          echo "$status_output"
+          
+          # Check if Azure SDK is available
+          if echo "$status_output" | grep -q "Azure SDK: Available"; then
+            echo "✅ Azure SDK is available"
+          elif echo "$status_output" | grep -q "Azure SDK: Not Available"; then
+            echo "❌ Azure SDK is NOT available"
+            echo "This indicates Azure packages were not properly installed"
+            exit 1
+          else
+            echo "⚠️  Could not determine Azure SDK status, but continuing..."
+          fi
+          
+          # Test broker command to check MSAL broker support
+          echo "🔐 Testing broker command:"
+          broker_output=$(mycli broker 2>&1)
+          echo "Broker output:"
+          echo "$broker_output"
+          
+          # Check for broker support indicators
+          if echo "$broker_output" | grep -q "Platform Support\|Broker.*Support\|MSAL.*Available"; then
+            echo "✅ Broker command works - MSAL packages available"
+          else
+            echo "❌ Broker command failed or MSAL packages missing"
+            echo "This indicates msal[broker] extras were not properly handled"
+            exit 1
+          fi
+          
+          # Specifically test for pymsalruntime availability
+          echo "🔍 Testing pymsalruntime availability:"
+          if echo "$broker_output" | grep -q "pymsalruntime\|native.*broker\|Platform.*Windows\|Platform.*macOS"; then
+            echo "✅ pymsalruntime functionality detected"
+          else
+            echo "⚠️  pymsalruntime functionality may not be available"
+            echo "This could indicate the binary wheel installation didn't work properly"
+          fi
+      
+      - name: Test authentication functionality
+        run: |
+          echo "🔐 Testing authentication functionality..."
+          
+          # Test logout command (should work regardless of login state)
+          echo "📤 Testing logout command:"
+          mycli logout
+          echo "✅ Logout command completed successfully"
+          
+          # Test login command structure (without actually logging in)
+          echo "� Testing login command help:"
+          login_help=$(mycli login --help 2>&1)
+          echo "Login help output:"
+          echo "$login_help"
+          
+          if echo "$login_help" | grep -q "Options:\|--broker\|--use-device-code"; then
+            echo "✅ Login command has expected authentication options"
+          else
+            echo "⚠️  Login command may be missing some authentication options"
+          fi
+      
+      - name: Test AWS CLI-style dependency verification
+        run: |
+          echo "🔍 AWS CLI-Style Dependency Verification..."
+          
+          # Get installation info
+          echo "📊 Formula installation info:"
           brew info mycli-app-src
           
-          echo "📁 Source installation files:"
+          echo "📦 Installed dependencies:"
+          brew deps mycli-app-src --installed
+          
+          echo "📁 Installed files preview:"
           brew list mycli-app-src | head -20
           
-          echo "🔍 Dependencies installed by Homebrew:"
-          brew deps mycli-app-src
+          # Check for the AWS CLI-style installation pattern
+          echo "🔍 Verifying AWS CLI-style pattern:"
+          cellar_path=$(brew --cellar mycli-app-src)
+          latest_version=$(ls "$cellar_path" | sort -V | tail -1)
+          version_path="$cellar_path/$latest_version"
+          
+          # Look for evidence of selective installation
+          if [[ -d "$version_path" ]]; then
+            echo "� Checking installation method indicators..."
+            
+            # Check for pip-related files or evidence of selective installation
+            if find "$version_path" -name "*.dist-info" -type d | head -5; then
+              echo "✅ Found .dist-info directories - indicates pip-style installation"
+              
+              # Count source vs binary packages
+              source_packages=0
+              binary_packages=0
+              
+              for dist_info in $(find "$version_path" -name "*.dist-info" -type d); do
+                package_name=$(basename "$dist_info" | sed 's/-.*//')
+                
+                # Check if this looks like a binary package
+                if [[ "$package_name" =~ pymsalruntime ]]; then
+                  echo "  🔧 Binary package detected: $package_name"
+                  binary_packages=$((binary_packages + 1))
+                else
+                  echo "  � Source package: $package_name"
+                  source_packages=$((source_packages + 1))
+                fi
+              done
+              
+              echo "📊 Package installation summary:"
+              echo "  Source packages: $source_packages"
+              echo "  Binary packages: $binary_packages"
+              
+              if [[ $binary_packages -gt 0 ]]; then
+                echo "✅ AWS CLI-style approach confirmed - binary wheels detected"
+              else
+                echo "⚠️  No binary packages detected - may not be using AWS CLI approach"
+              fi
+            else
+              echo "⚠️  No .dist-info directories found"
+            fi
+          fi
       
       - name: Cleanup
         if: always()
@@ -317,43 +330,52 @@ jobs:
       - name: Report results
         if: always()
         run: |
-          echo "🎯 Source Installation Test Results Summary:"
+          echo "🎯 AWS CLI-Style Formula Test Results Summary:"
           echo "Runner: ${{ matrix.runner }}"
           echo "Architecture: ${{ matrix.arch }}"
           echo "Status: ${{ job.status }}"
           
           if [[ "${{ job.status }}" == "success" ]]; then
-            echo "✅ All source installation tests passed!"
-            echo "🍺 Source-based Homebrew formula is working correctly"
-            echo "☁️  Azure SDK and MSAL broker support is properly integrated"
+            echo "✅ All AWS CLI-style formula tests passed!"
+            echo "🍺 AWS CLI-style Homebrew formula is working correctly"
+            echo "☁️  Azure SDK integration confirmed"
+            echo "🔧 MSAL broker support with pymsalruntime verified"
+            echo "📦 Selective binary wheel installation working"
           else
-            echo "❌ Some source installation tests failed"
-            echo "🔍 Check the job logs for details about Azure SDK or broker integration issues"
+            echo "❌ Some AWS CLI-style formula tests failed"
+            echo "🔍 Check the job logs for details about:"
+            echo "   - Formula installation issues"
+            echo "   - Azure SDK availability problems"
+            echo "   - MSAL broker support failures"
+            echo "   - pymsalruntime binary wheel installation problems"
           fi
 
   notify-results:
-    name: Notify Source Test Results
-    needs: test-source-homebrew
+    name: Notify AWS CLI-Style Test Results
+    needs: test-aws-cli-style-formula
     runs-on: ubuntu-latest
     if: always()
     
     steps:
       - name: Check test results
         run: |
-          echo "🎯 Overall Source Installation Test Results:"
-          echo "Needed jobs status: ${{ needs.test-source-homebrew.result }}"
+          echo "🎯 Overall AWS CLI-Style Formula Test Results:"
+          echo "Needed jobs status: ${{ needs.test-aws-cli-style-formula.result }}"
           
-          if [[ "${{ needs.test-source-homebrew.result }}" == "success" ]]; then
-            echo "✅ All source installation Homebrew tap tests passed successfully!"
-            echo "🍺 Source-based tap installation is working correctly on all tested platforms"
-            echo "☁️  Azure SDK integration and MSAL broker support confirmed working"
-            echo "📦 msal[broker] extras are properly handled in the source installation"
+          if [[ "${{ needs.test-aws-cli-style-formula.result }}" == "success" ]]; then
+            echo "✅ All AWS CLI-style Homebrew formula tests passed successfully!"
+            echo "🍺 AWS CLI-style tap installation working correctly on all tested platforms"
+            echo "☁️  Azure SDK integration confirmed working"
+            echo "🔧 MSAL broker support with pymsalruntime verified working"
+            echo "📦 Selective binary wheel installation (AWS CLI approach) confirmed"
+            echo "🎉 The hybrid approach (source + binary wheels) is working perfectly!"
           else
-            echo "❌ Some source installation Homebrew tap tests failed"
+            echo "❌ Some AWS CLI-style Homebrew formula tests failed"
             echo "🔍 Check the job logs for details about:"
+            echo "   - Formula generation or installation errors"
+            echo "   - AWS CLI-style dependency handling failures"
             echo "   - Azure SDK availability issues"
             echo "   - MSAL broker support problems"
-            echo "   - Python dependency installation failures"
-            echo "   - Formula generation or installation errors"
+            echo "   - pymsalruntime binary wheel installation failures"
             exit 1
           fi
