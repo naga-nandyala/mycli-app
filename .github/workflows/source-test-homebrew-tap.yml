@@ -231,7 +231,7 @@ jobs:
             echo "✅ Broker authentication method was attempted"
             
             # Check if it failed due to CI environment (expected)
-            if echo "$login_output" | grep -q "Force broker specified but only browser authentication is available\|Authorization type is not supported\|No accounts were found in the cache"; then
+            if echo "$login_output" | grep -q "Force broker specified but only browser authentication is available\|Authorization type is not supported\|No accounts were found in the cache\|platform doesn't support native broker authentication"; then
               echo "✅ Expected broker authentication failure in CI environment"
               echo "✅ This confirms broker detection is working correctly"
             elif echo "$login_output" | grep -q "Successfully authenticated"; then
