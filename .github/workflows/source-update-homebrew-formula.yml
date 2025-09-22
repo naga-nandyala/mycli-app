@@ -202,6 +202,18 @@ jobs:
                             except subprocess.CalledProcessError as e:
                                 print(f"⚠️  Failed to install {dep}: {e}", file=sys.stderr)
                     
+                    # Explicitly ensure broker dependencies are installed
+                    print("🔐 Ensuring broker dependencies are present...", file=sys.stderr)
+                    broker_deps = ["pymsalruntime", "msal-extensions"]
+                    for broker_dep in broker_deps:
+                        try:
+                            print(f"🔐 Installing broker dependency: {broker_dep}", file=sys.stderr)
+                            subprocess.run([str(pip_exe), "install", broker_dep], 
+                                         check=True, capture_output=True, text=True)
+                        except subprocess.CalledProcessError as e:
+                            print(f"⚠️  Failed to install broker dependency {broker_dep}: {e}", file=sys.stderr)
+                            # Not fatal - some broker deps might be platform-specific
+                    
                     # Get list of installed packages
                     print("📋 Getting list of installed packages...", file=sys.stderr)
                     list_result = subprocess.run([str(pip_exe), "list", "--format=json"], 
@@ -371,7 +383,7 @@ jobs:
         
         if not dependencies:
             print("❌ No dependencies found via any method, falling back to hardcoded list", file=sys.stderr)
-            # Fallback to hardcoded dependencies
+            # Fallback to hardcoded dependencies with broker support
             dependencies = [
                 ("click", "8.1.7"),
                 ("colorama", "0.4.6"),
@@ -379,6 +391,8 @@ jobs:
                 ("azure-core", "1.30.0"),
                 ("azure-mgmt-core", "1.4.0"),
                 ("msal", "1.31.0"),
+                ("msal-extensions", "1.3.1"),  # Broker support
+                ("pymsalruntime", "0.14.2"),  # Key broker dependency
                 ("requests", "2.32.3"),
                 ("certifi", "2024.8.30"),
                 ("charset-normalizer", "3.3.2"),
@@ -386,6 +400,10 @@ jobs:
                 ("urllib3", "2.2.3"),
                 ("six", "1.16.0"),
                 ("cryptography", "43.0.1"),
+                ("cffi", "1.17.1"),  # Required for cryptography
+                ("pycparser", "2.22"),  # Required for cffi
+                ("PyJWT", "2.9.0"),  # Required for MSAL
+                ("typing_extensions", "4.12.2"),  # Python compatibility
             ]
             packages_with_extras = []
         
@@ -471,7 +489,7 @@ jobs:
             print('=' * 50)
             
             # Check for specific broker-related packages
-            broker_packages = ['msal', 'pymsalruntime', 'azure-identity']
+            broker_packages = ['msal', 'pymsalruntime', 'azure-identity', 'msal-extensions']
             print('🔍 Broker functionality packages:')
             for pkg in broker_packages:
                 found = next((d for d in deps if d['name'] == pkg), None)
@@ -479,6 +497,15 @@ jobs:
                     print(f'  ✅ {pkg}: v{found[\"version\"]}')
                 else:
                     print(f'  ❌ {pkg}: NOT FOUND')
+            
+            # Check for critical broker dependency
+            pymsalruntime_found = next((d for d in deps if d['name'] == 'pymsalruntime'), None)
+            if pymsalruntime_found:
+                print(f'\\n🔐 ✅ BROKER SUPPORT: pymsalruntime v{pymsalruntime_found[\"version\"]} found!')
+                print('    This enables native broker authentication on supported platforms.')
+            else:
+                print('\\n🔐 ⚠️  BROKER LIMITATION: pymsalruntime not found.')
+                print('    Source installation will fall back to browser authentication.')
             
             # Show URL sources for verification
             print()
@@ -609,10 +636,10 @@ jobs:
             # Install the main application
             venv.pip_install buildpath
 
-            # Create the CLI wrapper script
+            # Create the CLI wrapper script using proper entry point
             (bin/"mycli").write <<~SHELL
               #!/usr/bin/env bash
-              PYTHONPATH="#{libexec}/lib/python3.12/site-packages" #{libexec}/bin/python -m mycli_app.cli "$@"
+              exec "#{libexec}/bin/mycli" "$@"
             SHELL
 
             # Generate shell completions if supported
@@ -636,20 +663,34 @@ jobs:
               This is the source-based installation of mycli-app, which builds from source
               and manages dependencies through Homebrew's Python virtual environment system.
               
-              Features:
+              🎯 Features:
               - Built from source for maximum compatibility
               - Dependencies managed by Homebrew
-              - Azure authentication with MSAL support
+              - Azure authentication with MSAL broker support
+              - Native broker authentication capabilities
               - Automatic updates through Homebrew
               
-              Benefits of this approach:
+              🔐 Authentication Methods Available:
+              - Browser-based authentication (default)
+              - Device code authentication (--use-device-code)
+              - Native broker authentication (enhanced security)
+              
+              🚀 For Enhanced Broker Authentication on macOS:
+              1. Install Microsoft Company Portal from the App Store
+              2. Enable Touch ID in System Preferences
+              3. Run: mycli broker  # Check broker status
+              4. Run: mycli login --broker  # Use broker authentication
+              
+              ✨ Benefits of this approach:
               - Smaller download size
               - Better integration with system Python
               - Easier dependency management
               - Automatic security updates for dependencies
+              - Native broker support with pymsalruntime
               
-              To use Azure authentication features, run:
-                mycli --help
+              📱 To test broker functionality:
+                mycli broker          # Check broker capabilities
+                mycli login --broker  # Use broker authentication
                 
               For the alternative venv bundle version, install:
                 brew install naga-nandyala/mycli-app/mycli-app-venv
