@@ -1,4 +1,4 @@
-name: Venv Bundling - Test Homebrew Cask
+name: Venv Bundling(Cask) - Test Homebrew
 
 on:
   release:

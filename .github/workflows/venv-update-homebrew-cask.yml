@@ -1,4 +1,4 @@
-name: Venv Bundling - Update Homebrew Cask
+name: Venv Bundling(cask) - Update Homebrew
 
 on:
   release:
