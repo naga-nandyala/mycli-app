@@ -112,9 +112,9 @@ jobs:
             arch arm: "arm64", intel: "x86_64"
             sha256 arm: "__ARM64_SHA__", intel: "__X64_SHA__"
 
-            # Asset naming convention observed from bundle script: mycli-<arch>-<version>-<arch>.tar.gz
-            # Example: mycli-arm64-0.1.2-arm64.tar.gz
-            url "https://github.com/naga-nandyala/mycli-app/releases/download/v#{version}/mycli-#{arch}-#{version}-#{arch}.tar.gz"
+            # Asset naming convention for v0.1.2: mycli-<version>-macos-<arch>.tar.gz
+            # Example: mycli-0.1.2-macos-arm64.tar.gz
+            url "https://github.com/naga-nandyala/mycli-app/releases/download/v#{version}/mycli-#{version}-macos-#{arch}.tar.gz"
 
             name "MyCLI App (Venv Bundle)"
             desc "Simple Azure-like CLI (portable virtual environment bundle with Azure + MSAL broker)"
