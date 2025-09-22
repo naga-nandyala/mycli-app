@@ -225,17 +225,22 @@ jobs:
                     print(f"No requires_dist found for {package_name}", file=sys.stderr)
                     return []
                 
+                print(f"📋 Found {len(requires_dist)} total requirements for {package_name}", file=sys.stderr)
+                
                 extra_deps = []
                 for req in requires_dist:
-                    # Look for dependencies with the specific extra
-                    # Example: 'pymsalruntime ; extra == "broker"'
-                    if f'extra == "{extras}"' in req:
+                    # Look for dependencies with the specific extra (flexible matching)
+                    # Examples: 
+                    # 'pymsalruntime ; extra == "broker"'
+                    # 'pymsalruntime ; (python_version >= "3.6") and extra == "broker"'
+                    if f"extra == '{extras}'" in req or f'extra == "{extras}"' in req:
                         # Extract the package name from the requirement
                         dep_name = req.split(';')[0].strip()
                         # Remove version constraints for now, just get the package name
                         dep_name = re.split(r'[<>=!]', dep_name)[0].strip()
-                        extra_deps.append(dep_name)
-                        print(f"📦 Found extra dependency: {dep_name} (for {extras})", file=sys.stderr)
+                        if dep_name:  # Make sure we got a valid name
+                            extra_deps.append(dep_name)
+                            print(f"📦 Found extra dependency: {dep_name} (for {extras}) from: {req[:80]}...", file=sys.stderr)
                 
                 print(f"✓ Found {len(extra_deps)} extra dependencies for {package_name}[{extras}]", file=sys.stderr)
                 return extra_deps
