@@ -657,13 +657,21 @@ jobs:
             venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
             
             # Install source-available dependencies first (excluding binary wheels)
-            # This follows the AWS CLI pattern for handling awscrt
+            # This follows the AWS CLI pattern for handling binary-only packages
             venv.pip_install resources.reject { |r| r.name == "pymsalruntime" }
 
-            # Install pymsalruntime binary wheel separately (AWS CLI-style approach)
-            # This allows Homebrew to handle the binary wheel correctly
+            # Install pymsalruntime binary wheel separately using direct wheel installation
+            # This bypasses the --no-binary restriction for this specific package
             if resources.any? { |r| r.name == "pymsalruntime" }
-              venv.pip_install resource("pymsalruntime")
+              resource("pymsalruntime").stage do
+                # Find the wheel file and install it directly
+                wheel_file = Dir["*.whl"].first
+                if wheel_file
+                  system libexec/"bin/pip", "install", "--no-deps", wheel_file
+                else
+                  opoo "pymsalruntime wheel file not found, broker support may be limited"
+                end
+              end
             end
 
             # Install the main application

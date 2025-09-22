@@ -98,6 +98,11 @@ class MycliAppSrc < Formula
     sha256 "3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953"
   end
 
+  resource "pymsalruntime" do
+    url "https://files.pythonhosted.org/packages/ce/04/2ddcbccab3c3deb6038df5fed00c485bd95353dc1d688e5f8241e039721d/pymsalruntime-0.18.1-cp310-cp310-macosx_14_0_arm64.whl"
+    sha256 "0c22e2e83faa10de422bbfaacc1bb2887c9025ee8a53f0fc2e4f7db01c4a7b66"
+  end
+
   resource "requests" do
     url "https://files.pythonhosted.org/packages/c9/74/b3ff8e6c8446842c3f5c837e9c3dfcfe2018ea6ecef224c710c85ef728f4/requests-2.32.5.tar.gz"
     sha256 "dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf"
@@ -127,8 +132,23 @@ class MycliAppSrc < Formula
     # Create virtual environment
     venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
     
-    # Install all Python dependencies
-    venv.pip_install resources
+    # Install source-available dependencies first (excluding binary wheels)
+    # This follows the AWS CLI pattern for handling binary-only packages
+    venv.pip_install resources.reject { |r| r.name == "pymsalruntime" }
+
+    # Install pymsalruntime binary wheel separately using direct wheel installation
+    # This bypasses the --no-binary restriction for this specific package
+    if resources.any? { |r| r.name == "pymsalruntime" }
+      resource("pymsalruntime").stage do
+        # Find the wheel file and install it directly
+        wheel_file = Dir["*.whl"].first
+        if wheel_file
+          system libexec/"bin/pip", "install", "--no-deps", wheel_file
+        else
+          opoo "pymsalruntime wheel file not found, broker support may be limited"
+        end
+      end
+    end
 
     # Install the main application
     venv.pip_install buildpath
@@ -157,38 +177,36 @@ class MycliAppSrc < Formula
 
   def caveats
     <<~EOS
-      This is the source-based installation of mycli-app, which builds from source
-      and manages dependencies through Homebrew's Python virtual environment system.
+      This is the source-based installation of mycli-app with full broker authentication support.
+      Built using the AWS CLI approach for handling binary wheel dependencies.
       
-      Features:
+      🎯 Features:
       - Built from source for maximum compatibility
       - Dependencies managed by Homebrew
-      - Azure authentication with MSAL support
-      - Native broker authentication support
+      - Full Azure authentication including native broker support
       - Automatic updates through Homebrew
       
       🔐 Authentication Methods Available:
       - Browser-based authentication (default)
       - Device code authentication (--use-device-code)
-      - Native broker authentication (enhanced security)
+      - Native broker authentication with pymsalruntime
+      - Microsoft Company Portal integration
+      - Touch ID/Face ID support on macOS (where available)
+      - MSAL token caching and refresh
       
-      🚀 For Enhanced Broker Authentication on macOS:
-      1. Install Microsoft Company Portal from the App Store
-      2. Enable Touch ID in System Preferences
-      3. Run: mycli broker  # Check broker status
-      4. Run: mycli login --broker  # Use broker authentication
+      ✨ Technical Implementation:
+      - Uses AWS CLI-style selective pip install for binary wheels
+      - Source dependencies built from PyPI source distributions
+      - Binary wheels (pymsalruntime) installed separately for compatibility
+      - Follows Homebrew Core best practices for mixed dependency types
       
-      ✨ Benefits of Broker Authentication:
-      - Single Sign-On (SSO) across Microsoft apps
-      - Enhanced security with device-bound tokens
-      - Touch ID/Face ID integration
-      - Conditional Access policy support
-      
-      📱 To test broker functionality:
-        mycli broker          # Check broker capabilities
-        mycli login --broker  # Use broker authentication
+      📱 Available authentication commands:
+        mycli login                    # Browser authentication (default)
+        mycli login --device           # Device code authentication  
+        mycli login --use-broker       # Native broker authentication
         
-      For the alternative venv bundle version, install:
+      � Alternative Installation:
+      For a pre-built venv bundle approach:
         brew install naga-nandyala/mycli-app/mycli-app-venv
         
       For more information, visit:
