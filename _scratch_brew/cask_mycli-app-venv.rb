@@ -33,6 +33,6 @@ cask "mycli-app-venv" do
   EOS
 
   test do
-    assert_match "MyCliApp version", shell_output("#{HOMEBREW_PREFIX}/bin/mycli --version")
+    assert_match "MyCliApp version", shell_output("mycli --version")
   end
 end
