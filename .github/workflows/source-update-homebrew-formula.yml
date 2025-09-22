@@ -316,7 +316,23 @@ jobs:
                     if file_info['packagetype'] == 'sdist':
                         return file_info['url'], file_info['digests']['sha256'], latest_version
                 
-                print(f"No source distribution found for {package_name} {latest_version}", file=sys.stderr)
+                # Special handling for binary-wheel packages like pymsalruntime (similar to AWS CLI's awscrt)
+                if package_name == 'pymsalruntime':
+                    print(f"🔍 {package_name} is a binary wheel package (like AWS CLI's awscrt)", file=sys.stderr)
+                    print(f"   Will be handled with selective pip install during formula build", file=sys.stderr)
+                    # Find the wheel distribution instead
+                    for file_info in data['urls']:
+                        if file_info['packagetype'] == 'bdist_wheel' and 'macos' in file_info['filename'].lower():
+                            print(f"✅ Found macOS wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
+                            return file_info['url'], file_info['digests']['sha256'], latest_version
+                    # If no macOS-specific wheel, use any available wheel
+                    for file_info in data['urls']:
+                        if file_info['packagetype'] == 'bdist_wheel':
+                            print(f"✅ Found wheel for {package_name}: {file_info['filename']}", file=sys.stderr)
+                            return file_info['url'], file_info['digests']['sha256'], latest_version
+                    print(f"⚠️  No wheel found for {package_name}, will rely on pip to handle platform-specific installation", file=sys.stderr)
+                else:
+                    print(f"No source distribution found for {package_name} {latest_version}", file=sys.stderr)
                 return None, None, None
                 
             except Exception as e:
@@ -512,9 +528,10 @@ jobs:
             if pymsalruntime_found:
                 print(f'\\n🔐 ✅ BROKER SUPPORT: pymsalruntime v{pymsalruntime_found[\"version\"]} found!')
                 print('    This enables native broker authentication on supported platforms.')
+                print('    Using AWS CLI-style selective pip install for binary wheel dependency.')
             else:
-                print('\\n🔐 ⚠️  BROKER LIMITATION: pymsalruntime not found.')
-                print('    Source installation will fall back to browser authentication.')
+                print('\\n🔐 ⚠️  pymsalruntime not found in dependency resolution.')
+                print('    Will be added to fallback dependencies for broker support.')
             
             # Show URL sources for verification
             print()
@@ -639,8 +656,15 @@ jobs:
             # Create virtual environment
             venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
             
-            # Install all Python dependencies
-            venv.pip_install resources
+            # Install source-available dependencies first (excluding binary wheels)
+            # This follows the AWS CLI pattern for handling awscrt
+            venv.pip_install resources.reject { |r| r.name == "pymsalruntime" }
+
+            # Install pymsalruntime binary wheel separately (AWS CLI-style approach)
+            # This allows Homebrew to handle the binary wheel correctly
+            if resources.any? { |r| r.name == "pymsalruntime" }
+              venv.pip_install resource("pymsalruntime")
+            end
 
             # Install the main application
             venv.pip_install buildpath
@@ -669,39 +693,36 @@ jobs:
 
           def caveats
             <<~EOS
-              This is the source-based installation of mycli-app, which builds from source
-              and manages dependencies through Homebrew's Python virtual environment system.
+              This is the source-based installation of mycli-app with full broker authentication support.
+              Built using the AWS CLI approach for handling binary wheel dependencies.
               
               🎯 Features:
               - Built from source for maximum compatibility
               - Dependencies managed by Homebrew
-              - Azure authentication with MSAL broker support
-              - Native broker authentication capabilities
+              - Full Azure authentication including native broker support
               - Automatic updates through Homebrew
               
               🔐 Authentication Methods Available:
               - Browser-based authentication (default)
               - Device code authentication (--use-device-code)
-              - Native broker authentication (enhanced security)
+              - Native broker authentication with pymsalruntime
+              - Microsoft Company Portal integration
+              - Touch ID/Face ID support on macOS (where available)
+              - MSAL token caching and refresh
               
-              🚀 For Enhanced Broker Authentication on macOS:
-              1. Install Microsoft Company Portal from the App Store
-              2. Enable Touch ID in System Preferences
-              3. Run: mycli broker  # Check broker status
-              4. Run: mycli login --broker  # Use broker authentication
+              ✨ Technical Implementation:
+              - Uses AWS CLI-style selective pip install for binary wheels
+              - Source dependencies built from PyPI source distributions
+              - Binary wheels (pymsalruntime) installed separately for compatibility
+              - Follows Homebrew Core best practices for mixed dependency types
               
-              ✨ Benefits of this approach:
-              - Smaller download size
-              - Better integration with system Python
-              - Easier dependency management
-              - Automatic security updates for dependencies
-              - Native broker support with pymsalruntime
-              
-              📱 To test broker functionality:
-                mycli broker          # Check broker capabilities
-                mycli login --broker  # Use broker authentication
+              📱 Available authentication commands:
+                mycli login                    # Browser authentication (default)
+                mycli login --device           # Device code authentication  
+                mycli login --use-broker       # Native broker authentication
                 
-              For the alternative venv bundle version, install:
+              � Alternative Installation:
+              For a pre-built venv bundle approach:
                 brew install naga-nandyala/mycli-app/mycli-app-venv
                 
               For more information, visit:
@@ -757,11 +778,15 @@ jobs:
         Released: ${{ github.event.release.tag_name }}
         - Source SHA256: ${{ steps.calculate_hash.outputs.source_sha }}
         
-        This release uses the source-based approach with Homebrew managed dependencies.
+        This release uses the source-based approach with AWS CLI-style binary wheel handling.
         Features:
         - Built from source for maximum compatibility
         - Dependencies managed by Homebrew's virtualenv system
+        - Full broker authentication support with pymsalruntime
+        - AWS CLI-style selective pip install for binary wheels
         - Automatic security updates for dependencies
+        
+        Technical implementation follows AWS CLI pattern for mixed source/binary dependencies.
         
         Automated update from release workflow"
         else
@@ -769,11 +794,15 @@ jobs:
 
         - Source SHA256: ${{ steps.calculate_hash.outputs.source_sha }}
         
-        This release uses the source-based approach with Homebrew managed dependencies.
+        This release uses the source-based approach with AWS CLI-style binary wheel handling.
         Features:
         - Built from source for maximum compatibility
         - Dependencies managed by Homebrew's virtualenv system
+        - Full broker authentication support with pymsalruntime
+        - AWS CLI-style selective pip install for binary wheels
         - Automatic security updates for dependencies
+        
+        Technical implementation follows AWS CLI pattern for mixed source/binary dependencies.
         
         Automated update (manual trigger)"
         fi
