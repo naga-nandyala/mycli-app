@@ -93,15 +93,18 @@ jobs:
                     data = tomli.load(f)
                 
                 dependencies = []
+                packages_with_extras = []
                 
                 # Get main dependencies
                 main_deps = data.get('project', {}).get('dependencies', [])
                 print(f"📋 Found main dependencies: {main_deps}", file=sys.stderr)
                 for dep in main_deps:
-                    name, version = parse_dependency_spec(dep)
-                    print(f"📋 Parsed main dep '{dep}' -> name='{name}', version='{version}'", file=sys.stderr)
+                    name, version, extras = parse_dependency_spec(dep)
+                    print(f"📋 Parsed main dep '{dep}' -> name='{name}', version='{version}', extras='{extras}'", file=sys.stderr)
                     if name and version:
                         dependencies.append((name, version))
+                        if extras:
+                            packages_with_extras.append((name, version, extras))
                 
                 # Get optional dependencies (azure, broker groups)
                 optional_deps = data.get('project', {}).get('optional-dependencies', {})
@@ -109,55 +112,60 @@ jobs:
                     if group_name in optional_deps:
                         print(f"📋 Found {group_name} dependencies: {optional_deps[group_name]}", file=sys.stderr)
                         for dep in optional_deps[group_name]:
-                            name, version = parse_dependency_spec(dep)
-                            print(f"📋 Parsed {group_name} dep '{dep}' -> name='{name}', version='{version}'", file=sys.stderr)
+                            name, version, extras = parse_dependency_spec(dep)
+                            print(f"📋 Parsed {group_name} dep '{dep}' -> name='{name}', version='{version}', extras='{extras}'", file=sys.stderr)
                             if name and version:
                                 # Avoid duplicates
                                 if (name, version) not in dependencies:
                                     dependencies.append((name, version))
+                                if extras and (name, version, extras) not in packages_with_extras:
+                                    packages_with_extras.append((name, version, extras))
                 
-                return dependencies
+                return dependencies, packages_with_extras
                 
             except Exception as e:
                 print(f"Error parsing pyproject.toml: {e}", file=sys.stderr)
-                return []
+                return [], []
         
         def parse_dependency_spec(dep_spec):
             """Parse dependency specification like 'click>=8.0.0' or 'azure-identity>=1.12.0' or 'msal[broker]>=1.20.0,<2'"""
-            # First, handle extras by extracting the base package name
+            extras = None
+            
+            # First, handle extras by extracting the base package name and extras
             if '[' in dep_spec:
-                # Extract package name without extras: 'msal[broker]>=1.20.0,<2' -> 'msal' and '>=1.20.0,<2'
-                match = re.match(r'^([^[]+)(?:\[[^\]]+\])?(.*)$', dep_spec)
+                # Extract package name and extras: 'msal[broker]>=1.20.0,<2' -> 'msal', 'broker', '>=1.20.0,<2'
+                match = re.match(r'^([^[]+)\[([^\]]+)\](.*)$', dep_spec)
                 if match:
                     base_name = match.group(1).strip()
-                    version_part = match.group(2).strip()
+                    extras = match.group(2).strip()
+                    version_part = match.group(3).strip()
                     # Now parse the version part
                     if '>=' in version_part:
                         version = version_part.split('>=')[1].split(',')[0].strip()
-                        return base_name, version
+                        return base_name, version, extras
                     elif '==' in version_part:
                         version = version_part.split('==')[1].split(',')[0].strip()
-                        return base_name, version
+                        return base_name, version, extras
                     elif '>' in version_part:
                         version = version_part.split('>')[1].split(',')[0].strip()
-                        return base_name, version
+                        return base_name, version, extras
                     else:
                         # No version specified with extras
-                        return base_name, "latest"
+                        return base_name, "latest", extras
             
             # Handle normal dependencies without extras
             if '>=' in dep_spec:
                 name, version = dep_spec.split('>=', 1)
-                return name.strip(), version.split(',')[0].strip()  # Handle comma-separated constraints
+                return name.strip(), version.split(',')[0].strip(), None  # Handle comma-separated constraints
             elif '==' in dep_spec:
                 name, version = dep_spec.split('==', 1)
-                return name.strip(), version.split(',')[0].strip()
+                return name.strip(), version.split(',')[0].strip(), None
             elif '>' in dep_spec:
                 name, version = dep_spec.split('>', 1)
-                return name.strip(), version.split(',')[0].strip()
+                return name.strip(), version.split(',')[0].strip(), None
             else:
                 # Just package name, get latest
-                return dep_spec.strip(), "latest"
+                return dep_spec.strip(), "latest", None
         
         def get_package_info(package_name, version_spec):
             """Get PyPI package download URL and SHA256 hash for latest compatible version"""
@@ -198,9 +206,53 @@ jobs:
                 print(f"Error processing {package_name}: {e}", file=sys.stderr)
                 return None, None, None
         
+        def get_extra_dependencies(package_name, version, extras):
+            """Get additional dependencies for a package with extras like msal[broker]"""
+            try:
+                print(f"🔍 Getting extra dependencies for {package_name}[{extras}] {version}...", file=sys.stderr)
+                
+                url = f"https://pypi.org/pypi/{package_name}/{version}/json"
+                response = requests.get(url)
+                if response.status_code != 200:
+                    print(f"Error fetching {package_name} {version} metadata: {response.status_code}", file=sys.stderr)
+                    return []
+                
+                data = response.json()
+                
+                # Get the requires_dist field which contains dependency information
+                requires_dist = data.get('info', {}).get('requires_dist', [])
+                if not requires_dist:
+                    print(f"No requires_dist found for {package_name}", file=sys.stderr)
+                    return []
+                
+                extra_deps = []
+                for req in requires_dist:
+                    # Look for dependencies with the specific extra
+                    # Example: 'pymsalruntime ; extra == "broker"'
+                    if f'extra == "{extras}"' in req:
+                        # Extract the package name from the requirement
+                        dep_name = req.split(';')[0].strip()
+                        # Remove version constraints for now, just get the package name
+                        dep_name = re.split(r'[<>=!]', dep_name)[0].strip()
+                        extra_deps.append(dep_name)
+                        print(f"📦 Found extra dependency: {dep_name} (for {extras})", file=sys.stderr)
+                
+                print(f"✓ Found {len(extra_deps)} extra dependencies for {package_name}[{extras}]", file=sys.stderr)
+                return extra_deps
+                
+            except Exception as e:
+                print(f"Error getting extra dependencies for {package_name}[{extras}]: {e}", file=sys.stderr)
+                return []
+        
         # Parse dependencies from pyproject.toml
         print("📋 Parsing dependencies from pyproject.toml...", file=sys.stderr)
-        dependencies = parse_pyproject_toml()
+        result = parse_pyproject_toml()
+        if isinstance(result, tuple):
+            dependencies, packages_with_extras = result
+        else:
+            # Fallback for old format
+            dependencies = result
+            packages_with_extras = []
         
         if not dependencies:
             print("❌ No dependencies found in pyproject.toml, falling back to hardcoded list", file=sys.stderr)
@@ -220,8 +272,22 @@ jobs:
                 ("six", "1.16.0"),
                 ("cryptography", "43.0.1"),
             ]
+            packages_with_extras = []
         
         print(f"📋 Found {len(dependencies)} dependencies to process", file=sys.stderr)
+        print(f"🎯 Found {len(packages_with_extras)} packages with extras to process", file=sys.stderr)
+        
+        # Process extra dependencies and add them to the main list
+        for package_name, version, extras in packages_with_extras:
+            print(f"🔍 Processing extras for {package_name}[{extras}] {version}...", file=sys.stderr)
+            extra_deps = get_extra_dependencies(package_name, version, extras)
+            for extra_dep in extra_deps:
+                # Add the extra dependency with "latest" version if not already present
+                if not any(dep[0] == extra_dep for dep in dependencies):
+                    dependencies.append((extra_dep, "latest"))
+                    print(f"➕ Added extra dependency: {extra_dep}", file=sys.stderr)
+                else:
+                    print(f"⏭️  Extra dependency {extra_dep} already present", file=sys.stderr)
         
         resources = []
         for name, version in dependencies:
