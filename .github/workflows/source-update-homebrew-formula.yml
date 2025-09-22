@@ -156,7 +156,8 @@ jobs:
                     print(f"📦 Using pip: {pip_exe}", file=sys.stderr)
                     
                     # Upgrade pip in the venv
-                    subprocess.run([str(pip_exe), "install", "--upgrade", "pip"], check=True)
+                    subprocess.run([str(pip_exe), "install", "--upgrade", "pip"], 
+                                 check=True, capture_output=True, text=True)
                     
                     # Install the main application (which should pull in all dependencies)
                     print("📦 Installing main application with all optional dependencies...", file=sys.stderr)
@@ -197,7 +198,7 @@ jobs:
                                     dep_cmd = [str(pip_exe), "install", dep]
                                 
                                 print(f"🔨 Installing: {dep}", file=sys.stderr)
-                                subprocess.run(dep_cmd, check=True, capture_output=True)
+                                subprocess.run(dep_cmd, check=True, capture_output=True, text=True)
                             except subprocess.CalledProcessError as e:
                                 print(f"⚠️  Failed to install {dep}: {e}", file=sys.stderr)
                     
@@ -435,7 +436,14 @@ jobs:
         EOF
         
         # Run the script and capture output
-        DEPS_JSON=$(python3 get_deps.py)
+        echo "🚀 Starting dependency resolution..."
+        DEPS_JSON=$(python3 get_deps.py 2>/dev/null)
+        if [[ $? -ne 0 ]] || [[ -z "$DEPS_JSON" ]]; then
+          echo "❌ Python script failed, checking stderr output..."
+          python3 get_deps.py
+          exit 1
+        fi
+        
         echo "dependencies_json<<EOF" >> $GITHUB_OUTPUT
         echo "$DEPS_JSON" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
