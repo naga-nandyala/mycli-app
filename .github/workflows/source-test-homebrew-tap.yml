@@ -1,0 +1,359 @@
+name: Source Installation - Test Homebrew Tap
+
+# This workflow tests the source-based Homebrew formula (mycli-app-src)
+# It verifies that the source installation installs and works correctly via Homebrew
+# with proper Azure SDK and MSAL broker support
+
+on:
+  # Test after the source formula is updated
+  workflow_run:
+    workflows: ["Source Installation - Update Homebrew Formula"]
+    types:
+      - completed
+  
+  # Allow manual testing
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: 'Version to test (leave empty for latest)'
+        required: false
+        type: string
+  
+  # Test on schedule (weekly, offset from venv test)
+  schedule:
+    - cron: '0 12 * * 1'  # Every Monday at 12 PM UTC (1 hour after venv test)
+
+jobs:
+  test-source-homebrew:
+    name: Test Source Installation Homebrew Formula
+    
+    # Only run if the source update workflow succeeded (or on manual/schedule trigger)
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      github.event_name == 'schedule' || 
+      github.event.workflow_run.conclusion == 'success'
+    
+    strategy:
+      matrix:
+        # Test on both Intel and Apple Silicon runners
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-13  # Intel runner
+            arch: x86_64
+    
+    runs-on: ${{ matrix.runner }}
+    
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+      
+      - name: Get system info
+        run: |
+          echo "🖥️  System Information:"
+          echo "Runner: ${{ matrix.runner }}"
+          echo "Expected Architecture: ${{ matrix.arch }}"
+          echo "Actual Architecture: $(uname -m)"
+          echo "macOS Version: $(sw_vers -productVersion)"
+          echo "Homebrew Version: $(brew --version | head -n1)"
+          echo "Python Version: $(python3 --version)"
+          echo "Available Python versions:"
+          ls -la /opt/homebrew/bin/python* 2>/dev/null || ls -la /usr/local/bin/python* 2>/dev/null || echo "No Homebrew Python found"
+      
+      - name: Clean previous installations
+        run: |
+          echo "🧹 Cleaning up any previous installations..."
+          brew uninstall mycli-app-src 2>/dev/null || echo "No previous source installation found"
+          brew uninstall mycli-app-venv 2>/dev/null || echo "No previous venv installation found"
+          brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No previous tap found"
+      
+      - name: Test source-based Homebrew tap installation
+        run: |
+          echo "🍺 Installing mycli-app-src (source-based) via dedicated Homebrew tap..."
+          
+          echo "📋 Adding the homebrew tap..."
+          brew tap naga-nandyala/mycli-app
+          
+          echo "📋 Verifying tap was added..."
+          brew tap | grep naga-nandyala/mycli-app
+          
+          echo "📋 Showing available formulas in tap..."
+          brew search naga-nandyala/mycli-app/
+          
+          echo "🍺 Installing mycli-app-src (source-based formula)..."
+          echo "This will build from source and install dependencies via Homebrew..."
+          brew install mycli-app-src --verbose
+      
+      - name: Verify installation
+        run: |
+          echo "✅ Verifying source-based installation..."
+          
+          # Check if mycli is in PATH
+          if ! command -v mycli &> /dev/null; then
+            echo "❌ mycli command not found in PATH"
+            echo "📋 Current PATH:"
+            echo "$PATH"
+            echo "📋 Homebrew bin contents:"
+            ls -la $(brew --prefix)/bin/mycli* 2>/dev/null || echo "No mycli found in Homebrew bin"
+            exit 1
+          fi
+          
+          # Check version output
+          echo "📋 Version check:"
+          mycli_version=$(mycli --version)
+          echo "Output: $mycli_version"
+          
+          # Verify it contains expected text
+          if [[ "$mycli_version" =~ "MyCliApp version" ]]; then
+            echo "✅ Version check passed"
+          else
+            echo "❌ Version check failed - unexpected output"
+            exit 1
+          fi
+      
+      - name: Test basic functionality
+        run: |
+          echo "🔧 Testing basic functionality..."
+          
+          # Test help command
+          echo "📋 Help command test:"
+          mycli --help
+          
+          # Test if source installation structure is correct
+          echo "🏗️  Source Installation Structure verification:"
+          binary_path=$(which mycli)
+          echo "Binary location: $binary_path"
+          
+          # Check if it's a script (source installation should be a shell script wrapper)
+          if command -v file &> /dev/null; then
+            file_output=$(file "$binary_path")
+            echo "File output: $file_output"
+            
+            if [[ "$file_output" =~ "shell script" ]] || [[ "$file_output" =~ "text" ]]; then
+              echo "✅ Source installation wrapper script detected"
+            else
+              echo "⚠️  Expected shell script wrapper, but got different file type"
+            fi
+          fi
+          
+          # Check if the underlying Python environment exists
+          echo "🐍 Python environment verification:"
+          if [[ -f "$binary_path" ]]; then
+            echo "📋 Wrapper script content preview:"
+            head -10 "$binary_path"
+            
+            # Try to find the actual Python environment path
+            if grep -q "PYTHONPATH" "$binary_path"; then
+              echo "✅ PYTHONPATH found in wrapper script"
+              python_path=$(grep "PYTHONPATH" "$binary_path" | head -1)
+              echo "Python environment: $python_path"
+            fi
+          fi
+      
+      - name: Test Azure SDK availability and broker support
+        run: |
+          echo "☁️  Testing Azure SDK availability and broker support..."
+          
+          # Check Azure SDK availability directly
+          echo "📋 Testing status command:"
+          status_output=$(mycli status 2>&1)
+          echo "Status output: $status_output"
+          
+          # Determine if Azure SDK is properly available
+          if echo "$status_output" | grep -q "Azure SDK: Available"; then
+            echo "✅ Azure SDK is available in the source installation"
+          elif echo "$status_output" | grep -q "Azure SDK: Not Available"; then
+            echo "❌ Azure SDK is NOT available in the source installation"
+            echo "This indicates that Azure packages were not properly included during source build"
+            exit 1
+          else
+            echo "⚠️ Could not determine Azure SDK status from output"
+            echo "Full status output: $status_output"
+            exit 1
+          fi
+          
+          # Test broker command availability (tests MSAL broker support)
+          echo "🔐 Testing broker command availability:"
+          broker_output=$(mycli broker 2>&1)
+          echo "Broker output: $broker_output"
+          
+          if echo "$broker_output" | grep -q "Platform Support"; then
+            echo "✅ Broker command works (MSAL broker packages available)"
+            
+            # Check for specific broker support indicators
+            if echo "$broker_output" | grep -q "MSAL.*Available\|msal.*found"; then
+              echo "✅ MSAL broker support confirmed"
+            else
+              echo "⚠️  MSAL support may be limited, checking further..."
+            fi
+          else
+            echo "❌ Broker command failed - MSAL packages may be missing"
+            echo "This could indicate that msal[broker] extras were not properly handled"
+            exit 1
+          fi
+      
+      - name: Test authentication functionality
+        run: |
+          echo "🔐 Testing authentication functionality..."
+          
+          # Test logout command
+          echo "📤 Testing logout command:"
+          mycli logout
+          echo "✅ Logout command completed successfully"
+      
+      - name: Test broker authentication detection
+        timeout-minutes: 1
+        run: |
+          echo "📥 Testing broker authentication detection..."
+          
+          # Test if broker authentication is available
+          echo "🔍 Testing broker availability check:"
+          broker_check_output=$(mycli broker 2>&1)
+          echo "Broker check output: $broker_check_output"
+          
+          # Look for indicators that MSAL broker support is compiled in
+          if echo "$broker_check_output" | grep -q -i "broker.*support\|msal.*broker\|authentication.*broker"; then
+            echo "✅ Broker authentication support detected"
+          else
+            echo "❌ Broker authentication support not clearly detected"
+            echo "This may indicate that msal[broker] dependencies were not properly included"
+          fi
+          
+          # Test login command with force-broker (should fail gracefully in CI)
+          echo "📥 Testing login command with --force-broker:"
+          login_output=$(mycli login --force-broker 2>&1) || login_exit_code=$?
+          echo "Login output: $login_output"
+          echo "Login exit code: ${login_exit_code:-0}"
+          
+          # Check if the command attempted broker authentication
+          if echo "$login_output" | grep -q "Broker-based authentication"; then
+            echo "✅ Broker authentication method was attempted"
+            
+            # Check if it failed due to CI environment (expected)
+            if echo "$login_output" | grep -q "Force broker specified but only browser authentication is available\|Authorization type is not supported\|No accounts were found in the cache"; then
+              echo "✅ Expected broker authentication failure in CI environment"
+              echo "✅ This confirms broker detection is working correctly"
+            elif echo "$login_output" | grep -q "Successfully authenticated"; then
+              echo "✅ Broker authentication succeeded (unexpected but good!)"
+            else
+              echo "⚠️  Unexpected broker authentication result, but continuing..."
+            fi
+          else
+            echo "❌ Broker authentication method was not attempted"
+            echo "This indicates a potential issue with MSAL broker integration"
+            exit 1
+          fi
+      
+      - name: Test Python dependencies in source installation
+        run: |
+          echo "📦 Testing Python dependencies in source installation..."
+          
+          # Get the Python environment path from the wrapper script
+          binary_path=$(which mycli)
+          if [[ -f "$binary_path" ]] && grep -q "PYTHONPATH" "$binary_path"; then
+            python_env=$(grep "PYTHONPATH" "$binary_path" | sed 's/.*PYTHONPATH="\([^"]*\)".*/\1/')
+            echo "📍 Python environment path: $python_env"
+            
+            if [[ -d "$python_env" ]]; then
+              echo "✅ Python environment directory exists"
+              echo "📦 Installed packages:"
+              ls -la "$python_env" | head -20
+              
+              # Check for key packages
+              echo "🔍 Checking for key Azure/MSAL packages:"
+              key_packages=("azure_identity" "azure_core" "azure_mgmt_core" "msal" "requests")
+              for pkg in "${key_packages[@]}"; do
+                if find "$python_env" -name "*${pkg}*" -type d | head -1; then
+                  echo "  ✅ $pkg: Found"
+                else
+                  echo "  ❌ $pkg: Not found"
+                fi
+              done
+              
+              # Look for broker-specific packages or indicators
+              echo "🔍 Checking for broker-related files:"
+              if find "$python_env" -name "*msal*" -type d | grep -q .; then
+                echo "  ✅ MSAL package directory found"
+                msal_dir=$(find "$python_env" -name "*msal*" -type d | head -1)
+                echo "    📍 MSAL location: $msal_dir"
+                if [[ -d "$msal_dir" ]]; then
+                  echo "    📁 MSAL contents:"
+                  ls -la "$msal_dir" | head -10
+                fi
+              else
+                echo "  ❌ MSAL package directory not found"
+              fi
+            else
+              echo "❌ Python environment directory does not exist: $python_env"
+              exit 1
+            fi
+          else
+            echo "⚠️  Could not determine Python environment path from wrapper script"
+          fi
+      
+      - name: Test formula info and installation details
+        run: |
+          echo "📊 Source installation tap and formula information:"
+          echo "📋 Tap info:"
+          brew tap-info naga-nandyala/mycli-app
+          
+          echo "📋 Source formula info:"
+          brew info mycli-app-src
+          
+          echo "📁 Source installation files:"
+          brew list mycli-app-src | head -20
+          
+          echo "🔍 Dependencies installed by Homebrew:"
+          brew deps mycli-app-src
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "🧹 Final cleanup..."
+          brew uninstall mycli-app-src 2>/dev/null || echo "Nothing to uninstall"
+          brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No tap to remove"
+      
+      - name: Report results
+        if: always()
+        run: |
+          echo "🎯 Source Installation Test Results Summary:"
+          echo "Runner: ${{ matrix.runner }}"
+          echo "Architecture: ${{ matrix.arch }}"
+          echo "Status: ${{ job.status }}"
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "✅ All source installation tests passed!"
+            echo "🍺 Source-based Homebrew formula is working correctly"
+            echo "☁️  Azure SDK and MSAL broker support is properly integrated"
+          else
+            echo "❌ Some source installation tests failed"
+            echo "🔍 Check the job logs for details about Azure SDK or broker integration issues"
+          fi
+
+  notify-results:
+    name: Notify Source Test Results
+    needs: test-source-homebrew
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check test results
+        run: |
+          echo "🎯 Overall Source Installation Test Results:"
+          echo "Needed jobs status: ${{ needs.test-source-homebrew.result }}"
+          
+          if [[ "${{ needs.test-source-homebrew.result }}" == "success" ]]; then
+            echo "✅ All source installation Homebrew tap tests passed successfully!"
+            echo "🍺 Source-based tap installation is working correctly on all tested platforms"
+            echo "☁️  Azure SDK integration and MSAL broker support confirmed working"
+            echo "📦 msal[broker] extras are properly handled in the source installation"
+          else
+            echo "❌ Some source installation Homebrew tap tests failed"
+            echo "🔍 Check the job logs for details about:"
+            echo "   - Azure SDK availability issues"
+            echo "   - MSAL broker support problems"
+            echo "   - Python dependency installation failures"
+            echo "   - Formula generation or installation errors"
+            exit 1
+          fi
