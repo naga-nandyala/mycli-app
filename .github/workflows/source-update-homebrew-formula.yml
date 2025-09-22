@@ -383,13 +383,16 @@ jobs:
         echo "✅ Source-based formula updated with version $VERSION"
         echo "Source SHA256: $SOURCE_SHA"
         
+        # Clean up temporary files
+        rm -f resources.rb
+        
         # Debug: Show the created file
         echo "📋 Created formula file:"
         ls -la Formula/mycli-app-src.rb
         echo "📋 Formula file preview:"
         head -30 Formula/mycli-app-src.rb
         echo "..."
-        tail -10 Formula/mycli-app.rb
+        tail -10 Formula/mycli-app-src.rb
         
     - name: Commit and push formula update
       run: |
