@@ -694,7 +694,8 @@ jobs:
 
             # Install pymsalruntime binary wheel separately using direct wheel installation
             if resources.any? { |r| r.name == "pymsalruntime" }
-              system venv.root/"bin/pip", "install", "--no-deps", resource("pymsalruntime").cached_download
+              pymsalruntime_wheel = resource("pymsalruntime").cached_download
+              system venv.root/"bin/pip", "install", "--no-deps", pymsalruntime_wheel, exception: true
             end
 
             # Install the main application

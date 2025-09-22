@@ -1,9 +1,6 @@
 # Homebrew formula for mycli-app (source-based installation)
 class MycliAppSrc < Formula
-  include  resource "pymsalruntime" do
-    url "https://files.pythonhosted.org/packages/af/4f/7b99671b2dacdecbb9bd9caccb0fe9b0a39d4579c488b25ebf73613bda8d/pymsalruntime-0.18.1-cp312-cp312-macosx_14_0_arm64.whl"
-    sha256 "a6c07651cf4e07690d1b022da0977f56820ef553ac6dcbf4c9e68e9611020997"
-  endguage::Python::Virtualenv
+  include Language::Python::Virtualenv
 
   desc "Simple Azure-like CLI tool by Naga (Source Installation)"
   homepage "https://github.com/naga-nandyala/mycli-app"
@@ -102,8 +99,8 @@ class MycliAppSrc < Formula
   end
 
   resource "pymsalruntime" do
-    url "https://files.pythonhosted.org/packages/98/a5/0c0f9c8c0a8a9e7d9c7b6b5a4a3b2a1f0e9d8c7b6a5a4a3a2a1a0/pymsalruntime-0.18.1-cp312-cp312-macosx_14_0_arm64.whl"
-    sha256 "TBD_NEED_TO_CALCULATE"
+    url "https://files.pythonhosted.org/packages/af/4f/7b99671b2dacdecbb9bd9caccb0fe9b0a39d4579c488b25ebf73613bda8d/pymsalruntime-0.18.1-cp312-cp312-macosx_14_0_arm64.whl"
+    sha256 "a6c07651cf4e07690d1b022da0977f56820ef553ac6dcbf4c9e68e9611020997"
   end
 
   resource "requests" do
@@ -141,7 +138,8 @@ class MycliAppSrc < Formula
 
     # Install pymsalruntime binary wheel separately using direct wheel installation
     if resources.any? { |r| r.name == "pymsalruntime" }
-      system venv.root/"bin/pip", "install", "--no-deps", resource("pymsalruntime").cached_download
+      pymsalruntime_wheel = resource("pymsalruntime").cached_download
+      system venv.root/"bin/pip", "install", "--no-deps", pymsalruntime_wheel, exception: true
     end
 
     # Install the main application
