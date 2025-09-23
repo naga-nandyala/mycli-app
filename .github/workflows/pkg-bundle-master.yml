@@ -1,0 +1,192 @@
+name: (pkg) - master
+
+# Master workflow that triggers the 3 pkg workflows sequentially
+
+permissions:
+  contents: write
+  actions: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+      create_release:
+        description: 'Create GitHub release'
+        type: boolean
+        default: true
+      skip_tests:
+        description: 'Skip final testing'
+        type: boolean
+        default: false
+
+jobs:
+  trigger-workflows:
+    name: "🚀 Trigger PKG Pipeline"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"  # Remove 'v' prefix
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
+
+      - name: 1️⃣ Trigger and Wait for PKG Build
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Trigger the build workflow
+            const buildDispatch = await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'pkg-build-release.yml',
+              ref: 'main',
+              inputs: {
+                version: '${{ steps.version.outputs.version }}',
+                create_release: '${{ github.event.inputs.create_release || 'true' }}'
+              }
+            });
+            console.log('✅ Triggered: PKG Build & Release workflow');
+            
+            // Wait for the workflow to start and complete
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10s for workflow to start
+            
+            let attempts = 0;
+            const maxAttempts = 60; // 30 minutes max wait (30s intervals)
+            
+            while (attempts < maxAttempts) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'pkg-build-release.yml',
+                per_page: 5
+              });
+              
+              const latestRun = runs.data.workflow_runs[0];
+              
+              if (latestRun && latestRun.status === 'completed') {
+                if (latestRun.conclusion === 'success') {
+                  console.log('✅ PKG Build & Release workflow completed successfully');
+                  break;
+                } else {
+                  throw new Error(`❌ PKG Build & Release workflow failed with conclusion: ${latestRun.conclusion}`);
+                }
+              }
+              
+              console.log(`⏳ Waiting for PKG Build to complete... (attempt ${attempts + 1}/${maxAttempts})`);
+              await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30s
+              attempts++;
+            }
+            
+            if (attempts >= maxAttempts) {
+              throw new Error('❌ Timeout waiting for PKG Build workflow to complete');
+            }
+
+      - name: 2️⃣ Trigger and Wait for Update Homebrew Cask  
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Trigger the update workflow
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'pkg-update-homebrew-cask.yml',
+              ref: 'main',
+              inputs: {
+                version: '${{ steps.version.outputs.version }}'
+              }
+            });
+            console.log('✅ Triggered: Update Homebrew Cask workflow');
+            
+            // Wait for the workflow to start and complete
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10s for workflow to start
+            
+            let attempts = 0;
+            const maxAttempts = 30; // 15 minutes max wait
+            
+            while (attempts < maxAttempts) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'pkg-update-homebrew-cask.yml',
+                per_page: 5
+              });
+              
+              const latestRun = runs.data.workflow_runs[0];
+              
+              if (latestRun && latestRun.status === 'completed') {
+                if (latestRun.conclusion === 'success') {
+                  console.log('✅ Update Homebrew Cask workflow completed successfully');
+                  break;
+                } else {
+                  throw new Error(`❌ Update Homebrew Cask workflow failed with conclusion: ${latestRun.conclusion}`);
+                }
+              }
+              
+              console.log(`⏳ Waiting for Update Homebrew Cask to complete... (attempt ${attempts + 1}/${maxAttempts})`);
+              await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30s
+              attempts++;
+            }
+            
+            if (attempts >= maxAttempts) {
+              throw new Error('❌ Timeout waiting for Update Homebrew Cask workflow to complete');
+            }
+
+      - name: 3️⃣ Trigger Test Homebrew Cask
+        if: ${{ github.event.inputs.skip_tests != 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'pkg-test-homebrew-cask.yml',
+              ref: 'main'
+            });
+            console.log('✅ Triggered: Test Homebrew Cask workflow (running independently)');
+
+      - name: 🎉 PKG Pipeline Started
+        run: |
+          echo "🚀 PKG Bundle Pipeline started for version ${{ steps.version.outputs.version }}"
+          echo "📋 Check the Actions tab to monitor progress of individual workflows"
+          echo "🔗 https://github.com/${{ github.repository }}/actions"
+          echo ""
+          echo "📦 Pipeline Overview:"
+          echo "  1. 🔨 Build .pkg installers for ARM64 and x86_64"
+          echo "  2. 📝 Update external Homebrew cask repository"
+          echo "  3. 🧪 Test installation via Homebrew cask"
+          echo ""
+          echo "📥 When complete, users can install via:"
+          echo "  brew tap naga-nandyala/mycli-app"
+          echo "  brew install --cask mycli-app-pkg"
+
+      - name: 📊 Summary
+        run: |
+          echo "## PKG Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Created:** \`${{ github.event.inputs.create_release || 'true' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Testing:** \`${{ github.event.inputs.skip_tests == 'true' && 'Skipped' || 'Enabled' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Workflow Sequence" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ **pkg-build-release.yml** - Creates .pkg installers and GitHub release" >> $GITHUB_STEP_SUMMARY
+          echo "2. ⏳ **pkg-update-homebrew-cask.yml** - Updates external homebrew-mycli-app repository" >> $GITHUB_STEP_SUMMARY
+          echo "3. ⏳ **pkg-test-homebrew-cask.yml** - Tests end-to-end installation${{ github.event.inputs.skip_tests == 'true' && ' (Skipped)' || '' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation Commands" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "brew tap naga-nandyala/mycli-app" >> $GITHUB_STEP_SUMMARY
+          echo "brew install --cask mycli-app-pkg" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
