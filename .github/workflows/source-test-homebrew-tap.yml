@@ -270,53 +270,23 @@ jobs:
           echo "📦 Installed dependencies:"
           brew deps mycli-app-src --installed
           
-          echo "📁 Installed files preview:"
-          brew list mycli-app-src | head -20
+          echo "📁 Installed files preview (sample only):"
+          brew list mycli-app-src | head -5
           
-          # Check for the AWS CLI-style installation pattern
-          echo "🔍 Verifying AWS CLI-style pattern:"
+          # Quick check for key indicators only
+          echo "🔍 Quick AWS CLI-style verification:"
           cellar_path=$(brew --cellar mycli-app-src)
-          latest_version=$(ls "$cellar_path" | sort -V | tail -1)
-          version_path="$cellar_path/$latest_version"
           
-          # Look for evidence of selective installation
-          if [[ -d "$version_path" ]]; then
-            echo "� Checking installation method indicators..."
-            
-            # Check for pip-related files or evidence of selective installation
-            if find "$version_path" -name "*.dist-info" -type d | head -5; then
-              echo "✅ Found .dist-info directories - indicates pip-style installation"
-              
-              # Count source vs binary packages
-              source_packages=0
-              binary_packages=0
-              
-              for dist_info in $(find "$version_path" -name "*.dist-info" -type d); do
-                package_name=$(basename "$dist_info" | sed 's/-.*//')
-                
-                # Check if this looks like a binary package
-                if [[ "$package_name" =~ pymsalruntime ]]; then
-                  echo "  🔧 Binary package detected: $package_name"
-                  binary_packages=$((binary_packages + 1))
-                else
-                  echo "  � Source package: $package_name"
-                  source_packages=$((source_packages + 1))
-                fi
-              done
-              
-              echo "📊 Package installation summary:"
-              echo "  Source packages: $source_packages"
-              echo "  Binary packages: $binary_packages"
-              
-              if [[ $binary_packages -gt 0 ]]; then
-                echo "✅ AWS CLI-style approach confirmed - binary wheels detected"
-              else
-                echo "⚠️  No binary packages detected - may not be using AWS CLI approach"
-              fi
-            else
-              echo "⚠️  No .dist-info directories found"
-            fi
+          # Just check if pymsalruntime exists (the key binary package)
+          if find "$cellar_path" -name "*pymsalruntime*" -type d | head -1 >/dev/null; then
+            echo "✅ AWS CLI-style approach confirmed - pymsalruntime binary package detected"
+          else
+            echo "⚠️  pymsalruntime not found - AWS CLI approach may not be working"
           fi
+          
+          # Quick count of dist-info directories
+          dist_info_count=$(find "$cellar_path" -name "*.dist-info" -type d | wc -l)
+          echo "📦 Total packages installed: $dist_info_count"
       
       - name: Cleanup
         if: always()

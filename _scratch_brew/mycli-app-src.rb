@@ -98,6 +98,11 @@ class MycliAppSrc < Formula
     sha256 "3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953"
   end
 
+  resource "pymsalruntime" do
+    url "https://files.pythonhosted.org/packages/af/4f/7b99671b2dacdecbb9bd9caccb0fe9b0a39d4579c488b25ebf73613bda8d/pymsalruntime-0.18.1-cp312-cp312-macosx_14_0_arm64.whl"
+    sha256 "a6c07651cf4e07690d1b022da0977f56820ef553ac6dcbf4c9e68e9611020997"
+  end
+
   resource "requests" do
     url "https://files.pythonhosted.org/packages/c9/74/b3ff8e6c8446842c3f5c837e9c3dfcfe2018ea6ecef224c710c85ef728f4/requests-2.32.5.tar.gz"
     sha256 "dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf"
@@ -119,34 +124,50 @@ class MycliAppSrc < Formula
   end
 
 
-  def install
-    # Ensure that the `openssl` crate picks up the intended library for cryptography
-    ENV["OPENSSL_DIR"] = Formula["openssl@3"].opt_prefix
-    ENV["OPENSSL_NO_VENDOR"] = "1"
+  # def install
+  #   # Ensure that the `openssl` crate picks up the intended library for cryptography
+  #   ENV["OPENSSL_DIR"] = Formula["openssl@3"].opt_prefix
+  #   ENV["OPENSSL_NO_VENDOR"] = "1"
 
-    # Create virtual environment
-    venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
+  #   # Create virtual environment
+  #   venv = virtualenv_create(libexec, "python3.12", system_site_packages: false)
     
-    # Install all dependencies from resources
-    # (pymsalruntime is excluded from resources and handled separately)
-    venv.pip_install resources
+  #   # Install source-available dependencies first (excluding binary wheels)
+  #   # This follows the AWS CLI pattern for handling binary-only packages
+  #   venv.pip_install resources.reject { |r| r.name == "pymsalruntime" }
 
-    # Install pymsalruntime separately using pip with automatic platform detection
-    # This allows pip to select the correct wheel for the target platform
-    system venv.root/"bin/pip", "install", "pymsalruntime", exception: true
+  #   # Install pymsalruntime binary wheel separately using direct wheel installation
+  #   if resources.any? { |r| r.name == "pymsalruntime" }
+  #     pymsalruntime_wheel = resource("pymsalruntime").cached_download
+  #     system venv.root/"bin/pip", "install", "--no-deps", pymsalruntime_wheel, exception: true
+  #   end
 
-    # Install the main application
-    venv.pip_install buildpath
+  #   # Install the main application
+  #   venv.pip_install buildpath
 
-    # Create the CLI wrapper script using proper entry point
-    (bin/"mycli").write <<~SHELL
-      #!/usr/bin/env bash
-      exec "#{libexec}/bin/mycli" "$@"
-    SHELL
+  #   # Create the CLI wrapper script using proper entry point
+  #   (bin/"mycli").write <<~SHELL
+  #     #!/usr/bin/env bash
+  #     exec "#{libexec}/bin/mycli" "$@"
+  #   SHELL
 
-    # Generate shell completions if supported
-    # generate_completions_from_executable(bin/"mycli", "--completion", base_name: "mycli")
-  end
+  #   # Generate shell completions if supported
+  #   # generate_completions_from_executable(bin/"mycli", "--completion", base_name: "mycli")
+  # end
+def install
+  venv = virtualenv_create(libexec, "python3.12")
+  venv.pip_install resources.reject { |r| r.name == "pymsalruntime" }
+
+  # Fix: Rename wheel file to correct format for pip
+  pymsal_wheel = resource("pymsalruntime").cached_download
+  correct_name = "pymsalruntime-0.18.1-cp312-cp312-macosx_14_0_arm64.whl"
+  cp pymsal_wheel, correct_name
+
+  venv.pip_install Pathname.pwd/correct_name
+
+  venv.pip_install_and_link buildpath
+end
+
 
   test do
     # Test basic functionality
@@ -180,10 +201,10 @@ class MycliAppSrc < Formula
       - MSAL token caching and refresh
       
       ✨ Technical Implementation:
-      - Uses dynamic pip install for platform-specific binary wheels
+      - Uses AWS CLI-style selective pip install for binary wheels
       - Source dependencies built from PyPI source distributions
-      - pymsalruntime installed with automatic platform detection
-      - Follows Homebrew best practices for mixed dependency types
+      - Binary wheels (pymsalruntime) installed separately for compatibility
+      - Follows Homebrew Core best practices for mixed dependency types
       
       📱 Available authentication commands:
         mycli login                    # Browser authentication (default)
