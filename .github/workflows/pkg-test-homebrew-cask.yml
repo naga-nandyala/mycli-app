@@ -1,368 +1,59 @@
-name: (pkg) -  test homebrew
+name: (pkg) - Test Homebrew
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      test_type:
-        description: 'Type of test to run'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-        - 'all'
-        - 'syntax'
-        - 'mock-install'
-        - 'integration'
-        - 'security'
+      version:
+        description: 'Version to test (defaults to latest release)'
+        required: false
+        type: string
 
 jobs:
-  test-pkg-cask-syntax:
-    runs-on: macos-latest
-    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'syntax'
-    
+  test-cask:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-13
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
 
-    - name: Set up Homebrew
-      uses: Homebrew/actions/setup-homebrew@master
+      - name: Environment info
+        run: |
+          echo "Runner: ${{ matrix.runner }}"
+          echo "Expected arch: ${{ matrix.arch }}"
+          echo "Actual arch: $(uname -m)"
+          brew --version | head -n1
 
-    - name: Test cask syntax
-      run: |
-        echo "🧪 Testing PKG cask syntax..."
-        
-        # Create a temporary tap directory
-        mkdir -p /tmp/homebrew-test-tap/Casks
-        cp _scratch_brew/cask_mycli-app-pkg.rb /tmp/homebrew-test-tap/Casks/mycli-app-pkg.rb
-        
-        # Test syntax by running audit (this doesn't require the actual files to exist)
-        cd /tmp/homebrew-test-tap
-        brew audit --cask Casks/mycli-app-pkg.rb || {
-          echo "❌ Cask syntax audit failed"
-          exit 1
-        }
-        
-        echo "✅ PKG cask syntax is valid"
+      - name: Tap and install cask
+        run: |
+          brew untap naga-nandyala/mycli-app 2>/dev/null || true
+          brew tap naga-nandyala/mycli-app
+          brew update
+          brew install --cask mycli-app-pkg
 
-  test-pkg-cask-mock-install:
-    runs-on: macos-latest
-    needs: test-pkg-cask-syntax
-    if: always() && (github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'mock-install')
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Validate cask installation
+        run: |
+          if ! command -v mycli >/dev/null; then
+            echo "mycli not found after cask install" >&2; exit 1; fi
+          mycli --version
+          mycli status || true
+          mycli --help | head -20
 
-    - name: Set up Homebrew
-      uses: Homebrew/actions/setup-homebrew@master
+      - name: Basic broker attempt (non-fatal)
+        run: |
+          set +e
+          mycli login --force-broker 2>&1 | head -40
+          echo "Broker test executed (errors acceptable in CI)."
 
-    - name: Create mock .pkg files for testing
-      run: |
-        echo "🏗️  Creating mock .pkg files for testing..."
-        
-        # Create mock pkg files (empty but valid)
-        mkdir -p mock_packages
-        
-        # Create mock ARM64 package
-        echo "Mock PKG for ARM64" > mock_packages/mycli-app-1.0.0-arm64.pkg
-        
-        # Create mock x86_64 package  
-        echo "Mock PKG for x86_64" > mock_packages/mycli-app-1.0.0-x86_64.pkg
-        
-        # Calculate actual SHA256s for these mock files
-        ARM64_SHA256=$(shasum -a 256 mock_packages/mycli-app-1.0.0-arm64.pkg | cut -d' ' -f1)
-        X86_64_SHA256=$(shasum -a 256 mock_packages/mycli-app-1.0.0-x86_64.pkg | cut -d' ' -f1)
-        
-        echo "Mock ARM64 SHA256: $ARM64_SHA256"
-        echo "Mock X86_64 SHA256: $X86_64_SHA256"
-        
-        # Start a simple HTTP server to serve the mock packages
-        python3 -m http.server 8000 --directory mock_packages &
-        HTTP_SERVER_PID=$!
-        echo "HTTP_SERVER_PID=$HTTP_SERVER_PID" >> $GITHUB_ENV
-        
-        # Wait for server to start
-        sleep 2
-        
-        # Test that server is running
-        curl -I http://localhost:8000/mycli-app-1.0.0-arm64.pkg || {
-          echo "❌ HTTP server failed to start"
-          exit 1
-        }
-        
-        echo "✅ Mock HTTP server running"
-        
-        # Create a test cask with localhost URLs and actual SHA256s
-        cat > test_cask_mycli-app-pkg.rb << EOF
-        cask "mycli-app-pkg" do
-          version "1.0.0"
-          
-          on_arm do
-            sha256 "$ARM64_SHA256"
-            url "http://localhost:8000/mycli-app-#{version}-arm64.pkg"
-          end
-          
-          on_intel do
-            sha256 "$X86_64_SHA256"
-            url "http://localhost:8000/mycli-app-#{version}-x86_64.pkg"
-          end
-          
-          name "MyCLI App (PKG Installer - Test)"
-          desc "Azure CLI-style tool for cloud operations with native macOS installer"
-          homepage "https://github.com/nagarnandyala/mycli-app"
-          
-          # PKG installer approach
-          pkg "mycli-app-#{version}-#{Hardware::CPU.arch}.pkg"
-          
-          # Binary specification (won't actually exist in test)
-          binary "/usr/local/bin/mycli"
-          
-          caveats <<~EOS
-            This is a test installation using mock packages.
-            The actual mycli binary will not be functional.
-          EOS
-        end
-        EOF
-
-    - name: Test cask download and PKG validation
-      run: |
-        echo "🧪 Testing PKG cask download..."
-        
-        # Create a temporary tap
-        TAP_DIR="/tmp/homebrew-test-tap"
-        mkdir -p "$TAP_DIR/Casks"
-        cp test_cask_mycli-app-pkg.rb "$TAP_DIR/Casks/mycli-app-pkg.rb"
-        
-        # Add the tap
-        brew tap test/tap "$TAP_DIR"
-        
-        # Test download (this will download the mock pkg but not install it)
-        brew fetch --cask test/tap/mycli-app-pkg || {
-          echo "❌ Failed to fetch PKG cask"
-          exit 1
-        }
-        
-        echo "✅ PKG cask download test passed"
-
-    - name: Test PKG file structure validation
-      run: |
-        echo "🔍 Testing PKG file structure validation..."
-        
-        # Test that the cask correctly identifies the architecture
-        CURRENT_ARCH=$(uname -m)
-        echo "Current architecture: $CURRENT_ARCH"
-        
-        # Test cask info
-        brew info --cask test/tap/mycli-app-pkg | grep -E "(arm64|x86_64)" || {
-          echo "❌ Architecture detection failed"
-          exit 1
-        }
-        
-        echo "✅ PKG architecture detection test passed"
-
-    - name: Test PKG installer simulation
-      run: |
-        echo "🔧 Testing PKG installer simulation..."
-        
-        # Create a more realistic mock PKG using macOS tools
-        mkdir -p mock_payload/usr/local/bin
-        echo '#!/bin/bash
-        echo "MyCLI App Mock Version 1.0.0"
-        echo "This is a test installation."' > mock_payload/usr/local/bin/mycli
-        chmod +x mock_payload/usr/local/bin/mycli
-        
-        # Build a test PKG
-        pkgbuild \
-          --root mock_payload \
-          --identifier com.test.mycli-app \
-          --version 1.0.0 \
-          --install-location / \
-          test-mycli-app.pkg
-        
-        # Verify PKG was created
-        if [[ -f "test-mycli-app.pkg" ]]; then
-          echo "✅ Test PKG created successfully"
-          
-          # Show PKG info
-          pkgutil --payload-files test-mycli-app.pkg | head -10
-        else
-          echo "❌ Failed to create test PKG"
-          exit 1
-        fi
-
-    - name: Cleanup
-      if: always()
-      run: |
-        # Kill the HTTP server if it's still running
-        if [[ -n "${HTTP_SERVER_PID:-}" ]]; then
-          kill $HTTP_SERVER_PID || true
-        fi
-        
-        # Remove test tap
-        brew untap test/tap || true
-        
-        echo "🧹 Cleanup completed"
-
-  test-pkg-cask-uninstall:
-    runs-on: macos-latest
-    needs: test-pkg-cask-mock-install
-    if: always() && (github.event.inputs.test_type == 'all')
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Test uninstall script creation
-      run: |
-        echo "🗑️  Testing PKG uninstall script..."
-        
-        # Create the uninstall script as it would be created by the PKG
-        cat > test-mycli-uninstall.sh << 'EOF'
-        #!/bin/bash
-        # Test uninstall script for MyCLI App
-        
-        echo "🗑️  Uninstalling MyCLI App (Test Mode)..."
-        
-        # In test mode, just report what would be removed
-        echo "Would remove: /usr/local/bin/mycli"
-        echo "Would remove: /usr/local/lib/mycli-app"
-        echo "Would remove: /usr/local/bin/mycli-uninstall.sh"
-        
-        echo "✅ MyCLI App uninstall simulation complete!"
-        EOF
-        
-        chmod +x test-mycli-uninstall.sh
-        
-        # Test the uninstall script
-        ./test-mycli-uninstall.sh
-        
-        echo "✅ Uninstall script test passed"
-
-  test-pkg-integration:
-    runs-on: macos-latest
-    needs: [test-pkg-cask-syntax, test-pkg-cask-mock-install]
-    if: always() && (github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'integration')
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Homebrew
-      uses: Homebrew/actions/setup-homebrew@master
-
-    - name: Test full PKG cask integration
-      run: |
-        echo "🔗 Testing full PKG cask integration..."
-        
-        # Test that the cask follows Homebrew PKG best practices
-        
-        # 1. Check that cask uses proper PKG naming
-        if grep -q 'pkg "mycli-app-.*\.pkg"' _scratch_brew/cask_mycli-app-pkg.rb; then
-          echo "✅ PKG naming follows convention"
-        else
-          echo "❌ PKG naming issue"
-          exit 1
-        fi
-        
-        # 2. Check that cask has proper binary specification
-        if grep -q 'binary "/usr/local/bin/mycli"' _scratch_brew/cask_mycli-app-pkg.rb; then
-          echo "✅ Binary specification correct"
-        else
-          echo "❌ Binary specification issue"
-          exit 1
-        fi
-        
-        # 3. Check that cask has uninstall options
-        if grep -q 'uninstall script:' _scratch_brew/cask_mycli-app-pkg.rb; then
-          echo "✅ Uninstall options specified"
-        else
-          echo "❌ Missing uninstall options"
-          exit 1
-        fi
-        
-        # 4. Check for postflight verification
-        if grep -q 'postflight do' _scratch_brew/cask_mycli-app-pkg.rb; then
-          echo "✅ Postflight verification included"
-        else
-          echo "⚠️  No postflight verification (optional)"
-        fi
-        
-        echo "✅ PKG cask integration test passed"
-
-  test-pkg-security:
-    runs-on: macos-latest
-    needs: test-pkg-cask-syntax
-    if: always() && (github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'security')
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Test PKG security considerations
-      run: |
-        echo "🔒 Testing PKG security considerations..."
-        
-        # Test that SHA256 placeholders are present
-        if grep -q 'sha256.*TBD_PKG_SHA256\|sha256.*[a-f0-9]\{64\}' _scratch_brew/cask_mycli-app-pkg.rb; then
-          echo "✅ SHA256 verification present"
-        else
-          echo "❌ Missing SHA256 verification"
-          exit 1
-        fi
-        
-        # Test that URLs are HTTPS
-        if grep -q 'url.*https://' _scratch_brew/cask_mycli-app-pkg.rb; then
-          echo "✅ HTTPS URLs used"
-        else
-          echo "❌ Non-HTTPS URLs found"
-          exit 1
-        fi
-        
-        # Test that PKG requires sudo (implicit in PKG format)
-        echo "✅ PKG format inherently requires elevated privileges"
-        
-        # Test that uninstall script uses sudo
-        if grep -q 'sudo:.*true' _scratch_brew/cask_mycli-app-pkg.rb; then
-          echo "✅ Uninstall requires sudo"
-        else
-          echo "❌ Uninstall should require sudo for system-wide removal"
-          exit 1
-        fi
-        
-        echo "✅ PKG security test passed"
-
-  summary:
-    runs-on: ubuntu-latest
-    needs: [test-pkg-cask-syntax, test-pkg-cask-mock-install, test-pkg-cask-uninstall, test-pkg-integration, test-pkg-security]
-    if: always()
-    
-    steps:
-    - name: Test Summary
-      run: |
-        echo "## 📋 PKG Homebrew Cask Test Summary"
-        echo ""
-        echo "| Test Category | Status |"
-        echo "|---------------|--------|"
-        echo "| Cask Syntax | ${{ needs.test-pkg-cask-syntax.result == 'success' && '✅ Pass' || '❌ Fail' }} |"
-        echo "| Mock Install | ${{ needs.test-pkg-cask-mock-install.result == 'success' && '✅ Pass' || '❌ Fail' }} |"
-        echo "| Uninstall | ${{ needs.test-pkg-cask-uninstall.result == 'success' && '✅ Pass' || '❌ Fail' }} |"
-        echo "| Integration | ${{ needs.test-pkg-integration.result == 'success' && '✅ Pass' || '❌ Fail' }} |"
-        echo "| Security | ${{ needs.test-pkg-security.result == 'success' && '✅ Pass' || '❌ Fail' }} |"
-        echo ""
-        
-        if [[ "${{ needs.test-pkg-cask-syntax.result }}" == "success" && \
-              "${{ needs.test-pkg-cask-mock-install.result }}" == "success" && \
-              "${{ needs.test-pkg-cask-uninstall.result }}" == "success" && \
-              "${{ needs.test-pkg-integration.result }}" == "success" && \
-              "${{ needs.test-pkg-security.result }}" == "success" ]]; then
-          echo "🎉 All PKG cask tests passed!"
-          echo ""
-          echo "The .pkg cask is ready for:"
-          echo "- Native macOS installer experience"
-          echo "- System-wide installation"
-          echo "- Proper security integration"
-          echo "- Clean uninstallation"
-        else
-          echo "❌ Some PKG cask tests failed. Please review the logs."
-          exit 1
-        fi
+      - name: Cleanup
+        if: always()
+        run: |
+          brew uninstall --cask mycli-app-pkg 2>/dev/null || true
+          brew untap naga-nandyala/mycli-app 2>/dev/null || true
