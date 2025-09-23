@@ -188,7 +188,7 @@ chmod +x "$PAYLOAD_DIR/usr/local/bin/mycli-uninstall.sh"
 chmod +x "$PAYLOAD_DIR/usr/local/bin/mycli-verify-dependencies.sh"
 
 # Build the package
-PKG_NAME="mycli-app-$VERSION.pkg"
+PKG_NAME="mycli-app-$VERSION-$ARCH.pkg"
 PKG_PATH="$PKG_DIR/$PKG_NAME"
 
 echo "🔨 Building .pkg installer..."

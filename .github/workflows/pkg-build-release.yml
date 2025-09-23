@@ -74,7 +74,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: mycli-app-${{ env.VERSION }}-${{ matrix.arch }}.pkg
-        path: mycli-app-${{ env.VERSION }}.pkg
+        path: mycli-app-${{ env.VERSION }}-${{ matrix.arch }}.pkg
         if-no-files-found: error
 
   create-release:
