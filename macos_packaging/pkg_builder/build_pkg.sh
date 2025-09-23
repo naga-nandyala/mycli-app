@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Build macOS .pkg installer for MyCLI App
 # This script creates a proper macOS installer package
-# Version: 3.0 - Added critical postinstall shebang line fixing (Sept 23, 2025)
+# Version: 4.0 - Enhanced postinstall shebang fixing with debugging (Sept 23, 2025)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -181,10 +181,22 @@ echo "🔧 Fixing shebang lines for installed environment..."
 find "/usr/local/lib/mycli-app/bin" -type f -executable | while read -r file; do
     if head -1 "$file" | grep -q "^#!.*python"; then
         echo "Fixing shebang in: $(basename "$file")"
-        # Replace the first line with the correct installed path
-        sed -i '' '1s|^#!.*python.*|#!/usr/local/lib/mycli-app/bin/python3|' "$file"
+        echo "Original shebang: $(head -1 "$file")"
+        # Replace the first line with the correct installed path - more aggressive approach
+        sed -i '' '1c\
+#!/usr/local/lib/mycli-app/bin/python3' "$file"
+        echo "New shebang: $(head -1 "$file")"
     fi
 done
+
+# Also specifically fix the main mycli script
+if [[ -f "/usr/local/lib/mycli-app/bin/mycli" ]]; then
+    echo "🎯 Specifically fixing main mycli script..."
+    echo "Original shebang: $(head -1 /usr/local/lib/mycli-app/bin/mycli)"
+    sed -i '' '1c\
+#!/usr/local/lib/mycli-app/bin/python3' "/usr/local/lib/mycli-app/bin/mycli"
+    echo "New shebang: $(head -1 /usr/local/lib/mycli-app/bin/mycli)"
+fi
 
 # Fix any .pth files that might have build paths
 find "/usr/local/lib/mycli-app" -name "*.pth" | while read -r pth_file; do
@@ -212,6 +224,13 @@ fi
 
 # Test installation
 echo "🧪 Testing installation..."
+echo "Debug: About to test /usr/local/bin/mycli --version"
+echo "Debug: Launcher script content:"
+cat /usr/local/bin/mycli
+echo "Debug: mycli script shebang:"
+head -1 /usr/local/lib/mycli-app/bin/mycli
+echo "Debug: Python interpreter exists: $(test -f /usr/local/lib/mycli-app/bin/python3 && echo 'Yes' || echo 'No')"
+
 if /usr/local/bin/mycli --version >/dev/null 2>&1; then
     echo "✅ MyCLI App installed successfully!"
     
@@ -226,6 +245,8 @@ else
     if [[ -f "/usr/local/lib/mycli-app/bin/mycli" ]]; then
         echo "- mycli shebang: $(head -1 /usr/local/lib/mycli-app/bin/mycli)"
     fi
+    echo "- Testing mycli script directly:"
+    /usr/local/lib/mycli-app/bin/mycli --version 2>&1 || echo "Direct execution failed"
 fi
 
 echo ""
