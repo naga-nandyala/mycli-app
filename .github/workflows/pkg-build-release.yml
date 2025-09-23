@@ -1,15 +1,20 @@
 name: (pkg) - build-release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
         description: 'Version to build'
         required: true
         default: '1.0.0'
+      create_release:
+        description: 'Create GitHub release?'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
 
 permissions:
   contents: write
@@ -40,12 +45,9 @@ jobs:
       run: |
         echo "🏗️  Creating venv bundle for ${{ matrix.arch }}"
         
-        # Determine version
-        if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/v}
-        else
-          VERSION="${{ github.event.inputs.version || '1.0.0' }}"
-        fi
+        # Use version from manual input
+        VERSION="${{ github.event.inputs.version }}"
+        echo "Building version: $VERSION"
         
         # Create venv bundle (this should match your existing venv creation process)
         python -m venv "build/mycli-${{ matrix.arch }}"
@@ -78,7 +80,7 @@ jobs:
   create-release:
     needs: build-pkg
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event.inputs.create_release == 'true'
     
     steps:
     - name: Checkout code
@@ -99,15 +101,15 @@ jobs:
         # List what we're releasing
         ls -la release/
 
-    - name: Extract version
+    - name: Set version from input
       run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
+        VERSION="${{ github.event.inputs.version }}"
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ github.ref_name }}
+        tag_name: v${{ env.VERSION }}
         name: MyCLI App v${{ env.VERSION }}
         draft: false
         prerelease: false
@@ -160,15 +162,15 @@ jobs:
   update-homebrew-cask:
     needs: create-release
     runs-on: macos-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event.inputs.create_release == 'true'
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Extract version
+    - name: Set version from input
       run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
+        VERSION="${{ github.event.inputs.version }}"
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
     - name: Download release info and update cask

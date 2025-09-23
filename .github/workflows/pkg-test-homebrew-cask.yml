@@ -1,19 +1,24 @@
 name: (pkg) -  test homebrew
 
 on:
-  push:
-    paths:
-      - '_scratch_brew/cask_mycli-app-pkg.rb'
-      - '.github/workflows/pkg-test-homebrew-cask.yml'
-  pull_request:
-    paths:
-      - '_scratch_brew/cask_mycli-app-pkg.rb'
-      - '.github/workflows/pkg-test-homebrew-cask.yml'
   workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of test to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - 'all'
+        - 'syntax'
+        - 'mock-install'
+        - 'integration'
+        - 'security'
 
 jobs:
   test-pkg-cask-syntax:
     runs-on: macos-latest
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'syntax'
     
     steps:
     - name: Checkout code
@@ -42,6 +47,7 @@ jobs:
   test-pkg-cask-mock-install:
     runs-on: macos-latest
     needs: test-pkg-cask-syntax
+    if: always() && (github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'mock-install')
     
     steps:
     - name: Checkout code
@@ -200,6 +206,7 @@ jobs:
   test-pkg-cask-uninstall:
     runs-on: macos-latest
     needs: test-pkg-cask-mock-install
+    if: always() && (github.event.inputs.test_type == 'all')
     
     steps:
     - name: Checkout code
@@ -234,6 +241,7 @@ jobs:
   test-pkg-integration:
     runs-on: macos-latest
     needs: [test-pkg-cask-syntax, test-pkg-cask-mock-install]
+    if: always() && (github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'integration')
     
     steps:
     - name: Checkout code
@@ -284,6 +292,7 @@ jobs:
   test-pkg-security:
     runs-on: macos-latest
     needs: test-pkg-cask-syntax
+    if: always() && (github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'security')
     
     steps:
     - name: Checkout code
