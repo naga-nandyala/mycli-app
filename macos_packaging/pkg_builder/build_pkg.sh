@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Build macOS .pkg installer for MyCLI App
 # This script creates a proper macOS installer package
-# Version: 4.0 - Enhanced postinstall shebang fixing with debugging (Sept 23, 2025)
+# Version: 5.0 - ChatGPT enhanced with bundle reuse and consistent fixing (Sept 23, 2025)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -33,12 +33,45 @@ echo "📦 Creating payload structure..."
 mkdir -p "$PAYLOAD_DIR/usr/local/bin"
 mkdir -p "$PAYLOAD_DIR/usr/local/lib/mycli-app"
 
-# Copy the mycli application (assuming venv bundle approach)
+# Copy the mycli application (venv bundle approach with reuse logic)
 VENV_BUNDLE_PATH="$PROJECT_ROOT/build/mycli-$ARCH"
 echo "🔍 Looking for venv bundle at: $VENV_BUNDLE_PATH"
+
+# Function to fix shebang lines consistently
+fix_shebang_lines() {
+    local target_dir="$1"
+    echo "🔧 Fixing shebang lines for portability in: $target_dir"
+    
+    find "$target_dir/bin" -type f -executable | while read -r file; do
+        if head -1 "$file" | grep -q "^#!.*python"; then
+            echo "  Fixing shebang in: $(basename "$file")"
+            # Use 'c' command to replace the entire first line
+            sed -i '' "1c\\
+#!/usr/local/lib/mycli-app/bin/python3" "$file"
+        fi
+    done
+    
+    # Also fix any pth files that might have absolute paths
+    find "$target_dir" -name "*.pth" | while read -r pth_file; do
+        if [[ -f "$pth_file" ]]; then
+            echo "  Fixing paths in: $(basename "$pth_file")"
+            sed -i '' "s|$VENV_BUNDLE_PATH|/usr/local/lib/mycli-app|g" "$pth_file"
+        fi
+    done
+    
+    # Clean up Python cache files that might contain absolute paths
+    echo "🧹 Cleaning up Python cache files..."
+    find "$target_dir" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    find "$target_dir" -name "*.pyc" -type f -delete 2>/dev/null || true
+    find "$target_dir" -name "*.pyo" -type f -delete 2>/dev/null || true
+}
+
 if [[ -d "$VENV_BUNDLE_PATH" ]]; then
-    echo "📋 Copying venv bundle from: $VENV_BUNDLE_PATH"
+    echo "📋 Reusing existing venv bundle from: $VENV_BUNDLE_PATH"
     cp -r "$VENV_BUNDLE_PATH"/* "$PAYLOAD_DIR/usr/local/lib/mycli-app/"
+    
+    # Apply consistent shebang fixing to reused bundle
+    fix_shebang_lines "$PAYLOAD_DIR/usr/local/lib/mycli-app"
     
     # Verify Azure dependencies in the bundle
     echo "🔍 Verifying Azure dependencies in bundle..."
@@ -47,18 +80,9 @@ if [[ -d "$VENV_BUNDLE_PATH" ]]; then
         pip list | grep -E "(azure|msal)" && echo "✅ Azure dependencies found" || echo "⚠️  Azure dependencies missing"
         deactivate
     fi
-    
-    # Create symlink script in /usr/local/bin
-    cat > "$PAYLOAD_DIR/usr/local/bin/mycli" << 'EOF'
-#!/bin/bash
-# MyCLI App launcher script
-MYCLI_HOME="/usr/local/lib/mycli-app"
-exec "$MYCLI_HOME/bin/mycli" "$@"
-EOF
-    chmod +x "$PAYLOAD_DIR/usr/local/bin/mycli"
 else
     echo "❌ Venv bundle not found at: $VENV_BUNDLE_PATH"
-    echo "Creating venv bundle with Azure dependencies..."
+    echo "Creating new venv bundle with Azure dependencies..."
     
     # Verify pyproject.toml exists
     if [[ ! -f "$PROJECT_ROOT/pyproject.toml" ]]; then
@@ -83,63 +107,40 @@ else
     echo "✅ Created venv bundle with Azure dependencies"
     deactivate
     
-    # Now copy the bundle
+    # Copy the new bundle
     cp -r "$VENV_BUNDLE_PATH"/* "$PAYLOAD_DIR/usr/local/lib/mycli-app/"
     
-    # Fix shebang lines to use the target installation paths
-    echo "🔧 Fixing shebang lines for portability..."
-    find "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin" -type f -executable | while read -r file; do
-        if head -1 "$file" | grep -q "^#!.*python"; then
-            echo "Fixing shebang in: $(basename "$file")"
-            # Replace the first line with a portable shebang
-            sed -i '' '1s|^#!.*python.*|#!/usr/local/lib/mycli-app/bin/python3|' "$file"
-        fi
-    done
-    
-    # Also fix any pth files that might have absolute paths
-    find "$PAYLOAD_DIR/usr/local/lib/mycli-app" -name "*.pth" | while read -r pth_file; do
-        if [[ -f "$pth_file" ]]; then
-            echo "Fixing paths in: $(basename "$pth_file")"
-            # Replace absolute paths with relative paths
-            sed -i '' "s|$VENV_BUNDLE_PATH|/usr/local/lib/mycli-app|g" "$pth_file"
-        fi
-    done
-    
-    # Clean up Python cache files that might contain absolute paths
-    echo "🧹 Cleaning up Python cache files..."
-    find "$PAYLOAD_DIR/usr/local/lib/mycli-app" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-    find "$PAYLOAD_DIR/usr/local/lib/mycli-app" -name "*.pyc" -type f -delete 2>/dev/null || true
-    find "$PAYLOAD_DIR/usr/local/lib/mycli-app" -name "*.pyo" -type f -delete 2>/dev/null || true
-    
-    echo "✅ Fixed shebang lines and paths for target installation"
-    
-    # Create symlink script in /usr/local/bin
-    cat > "$PAYLOAD_DIR/usr/local/bin/mycli" << 'EOF'
+    # Apply consistent shebang fixing to new bundle
+    fix_shebang_lines "$PAYLOAD_DIR/usr/local/lib/mycli-app"
+fi
+
+# Create symlink script in /usr/local/bin (common to both paths)
+cat > "$PAYLOAD_DIR/usr/local/bin/mycli" << 'EOF'
 #!/bin/bash
 # MyCLI App launcher script
 MYCLI_HOME="/usr/local/lib/mycli-app"
 exec "$MYCLI_HOME/bin/mycli" "$@"
 EOF
-    chmod +x "$PAYLOAD_DIR/usr/local/bin/mycli"
+chmod +x "$PAYLOAD_DIR/usr/local/bin/mycli"
+
+# Verify the mycli script works with the fixed paths
+echo "🧪 Verifying mycli script..."
+if [[ -f "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/python3" ]]; then
+    echo "✅ Python interpreter found at target location"
     
-    # Verify the mycli script works with the fixed paths
-    echo "🧪 Verifying mycli script..."
-    if [[ -f "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/python3" ]]; then
-        echo "✅ Python interpreter found at target location"
-        
-        # Test that the fixed mycli script can at least try to run
-        # (We can't fully test it since we're not in the target environment)
-        if grep -q "#!/usr/local/lib/mycli-app/bin/python3" "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/mycli"; then
-            echo "✅ mycli shebang correctly fixed"
-        else
-            echo "⚠️  mycli shebang may not be fixed properly"
-        fi
+    # Test that the fixed mycli script has the correct shebang
+    if grep -q "#!/usr/local/lib/mycli-app/bin/python3" "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/mycli"; then
+        echo "✅ mycli shebang correctly fixed"
     else
-        echo "❌ Python interpreter not found in expected location"
-        echo "Available files in bin directory:"
-        ls -la "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/" || echo "Bin directory not found"
-        exit 1
+        echo "⚠️  mycli shebang may not be fixed properly"
+        echo "Current shebang line:"
+        head -1 "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/mycli"
     fi
+else
+    echo "❌ Python interpreter not found in expected location"
+    echo "Available files in bin directory:"
+    ls -la "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/" || echo "Bin directory not found"
+    exit 1
 fi
 
 # Create preinstall script
@@ -167,7 +168,7 @@ EOF
 cat > "$SCRIPTS_DIR/postinstall" << 'EOF'
 #!/bin/bash
 # Postinstall script for MyCLI App
-# Updated with Python virtual environment portability fixes
+# Version 5.0 - Enhanced with consistent shebang fixing approach
 
 echo "📋 MyCLI App: Completing installation..."
 
@@ -176,27 +177,24 @@ chown -R root:wheel "/usr/local/lib/mycli-app"
 chmod -R 755 "/usr/local/lib/mycli-app"
 chmod +x "/usr/local/bin/mycli"
 
-# Fix shebang lines AFTER installation to ensure proper paths
-echo "🔧 Fixing shebang lines for installed environment..."
-find "/usr/local/lib/mycli-app/bin" -type f -executable | while read -r file; do
-    if head -1 "$file" | grep -q "^#!.*python"; then
-        echo "Fixing shebang in: $(basename "$file")"
-        echo "Original shebang: $(head -1 "$file")"
-        # Replace the first line with the correct installed path - more aggressive approach
-        sed -i '' '1c\
-#!/usr/local/lib/mycli-app/bin/python3' "$file"
-        echo "New shebang: $(head -1 "$file")"
-    fi
-done
+# Enhanced shebang fixing function (matches build-time function)
+fix_shebang_lines_postinstall() {
+    echo "🔧 Fixing shebang lines for installed environment..."
+    
+    find "/usr/local/lib/mycli-app/bin" -type f -executable | while read -r file; do
+        if head -1 "$file" | grep -q "^#!.*python"; then
+            echo "  Fixing shebang in: $(basename "$file")"
+            echo "  Original: $(head -1 "$file")"
+            # Use 'c' command to replace the entire first line (consistent with build-time)
+            sed -i '' "1c\\
+#!/usr/local/lib/mycli-app/bin/python3" "$file"
+            echo "  New: $(head -1 "$file")"
+        fi
+    done
+}
 
-# Also specifically fix the main mycli script
-if [[ -f "/usr/local/lib/mycli-app/bin/mycli" ]]; then
-    echo "🎯 Specifically fixing main mycli script..."
-    echo "Original shebang: $(head -1 /usr/local/lib/mycli-app/bin/mycli)"
-    sed -i '' '1c\
-#!/usr/local/lib/mycli-app/bin/python3' "/usr/local/lib/mycli-app/bin/mycli"
-    echo "New shebang: $(head -1 /usr/local/lib/mycli-app/bin/mycli)"
-fi
+# Apply enhanced shebang fixing
+fix_shebang_lines_postinstall
 
 # Fix any .pth files that might have build paths
 find "/usr/local/lib/mycli-app" -name "*.pth" | while read -r pth_file; do
