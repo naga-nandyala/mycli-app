@@ -1,4 +1,4 @@
-name: Build and Release PKG Installer
+name: (pkg) - build-release
 
 on:
   push:

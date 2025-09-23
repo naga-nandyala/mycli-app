@@ -1,4 +1,4 @@
-name: Test PKG Homebrew Cask
+name: (pkg) -  test homebrew
 
 on:
   push:
