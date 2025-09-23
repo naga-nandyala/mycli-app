@@ -1,7 +1,7 @@
 name: src style - Test Homebrew Tap
 
 # This workflow tests the enhanced source-based Homebrew formula (mycli-app-src)
-# It verifies the AWS CLI-style approach for handling binary wheels (pymsalruntime)
+# It verifies the SRC CLI-style approach for handling binary wheels (pymsalruntime)
 # while building other dependencies from source
 
 on:
@@ -18,8 +18,8 @@ on:
   #   - cron: '0 14 * * 1'  # Every Monday at 2 PM UTC
 
 jobs:
-  test-aws-cli-style-formula:
-    name: Test AWS CLI-Style Formula Installation
+  test-src-cli-style-formula:
+    name: Test SRC CLI-Style Formula Installation
     
     # Run on manual trigger or schedule
     if: |
@@ -64,9 +64,9 @@ jobs:
           brew uninstall mycli-app-venv 2>/dev/null || echo "No previous venv installation found"
           brew untap naga-nandyala/mycli-app 2>/dev/null || echo "No previous tap found"
       
-      - name: Install and test AWS CLI-style formula
+      - name: Install and test SRC CLI-style formula
         run: |
-          echo "🍺 Installing mycli-app-src (AWS CLI-style) via Homebrew tap..."
+          echo "🍺 Installing mycli-app-src (SRC CLI-style) via Homebrew tap..."
           
           echo "📋 Adding the homebrew tap..."
           brew tap naga-nandyala/mycli-app
@@ -77,13 +77,13 @@ jobs:
           echo "📋 Showing available formulas in tap..."
           brew search naga-nandyala/mycli-app/
           
-          echo "🍺 Installing mycli-app-src (AWS CLI-style formula)..."
-          echo "This uses AWS CLI approach: source + selective binary wheels..."
+          echo "🍺 Installing mycli-app-src (SRC CLI-style formula)..."
+          echo "This uses SRC CLI approach: source + selective binary wheels..."
           brew install mycli-app-src --verbose
       
       - name: Verify CLI installation and commands
         run: |
-          echo "✅ Verifying AWS CLI-style installation..."
+          echo "✅ Verifying SRC CLI-style installation..."
           
           # Check if mycli is in PATH
           if ! command -v mycli &> /dev/null; then
@@ -123,9 +123,9 @@ jobs:
             exit 1
           fi
       
-      - name: Test AWS CLI-style installation structure
+      - name: Test SRC CLI-style installation structure
         run: |
-          echo "🏗️  AWS CLI-Style Installation Structure verification:"
+          echo "🏗️  SRC CLI-Style Installation Structure verification:"
           binary_path=$(which mycli)
           echo "Binary location: $binary_path"
           
@@ -181,7 +181,7 @@ jobs:
                   echo "  ⚠️  No binary files found - may be source installation"
                 fi
               else
-                echo "  ❌ pymsalruntime not found - AWS CLI-style installation may have failed"
+                echo "  ❌ pymsalruntime not found - SRC CLI-style installation may have failed"
                 exit 1
               fi
             else
@@ -259,9 +259,9 @@ jobs:
             echo "⚠️  Login command may be missing some authentication options"
           fi
       
-      - name: Test AWS CLI-style dependency verification
+      - name: Test SRC CLI-style dependency verification
         run: |
-          echo "🔍 AWS CLI-Style Dependency Verification..."
+          echo "🔍 SRC CLI-Style Dependency Verification..."
           
           # Get installation info
           echo "📊 Formula installation info:"
@@ -274,14 +274,14 @@ jobs:
           brew list mycli-app-src | head -5
           
           # Quick check for key indicators only
-          echo "🔍 Quick AWS CLI-style verification:"
+          echo "🔍 Quick SRC CLI-style verification:"
           cellar_path=$(brew --cellar mycli-app-src)
           
           # Just check if pymsalruntime exists (the key binary package)
           if find "$cellar_path" -name "*pymsalruntime*" -type d | head -1 >/dev/null; then
-            echo "✅ AWS CLI-style approach confirmed - pymsalruntime binary package detected"
+            echo "✅ SRC CLI-style approach confirmed - pymsalruntime binary package detected"
           else
-            echo "⚠️  pymsalruntime not found - AWS CLI approach may not be working"
+            echo "⚠️  pymsalruntime not found - SRC CLI approach may not be working"
           fi
           
           # Quick count of dist-info directories
@@ -298,19 +298,19 @@ jobs:
       - name: Report results
         if: always()
         run: |
-          echo "🎯 AWS CLI-Style Formula Test Results Summary:"
+          echo "🎯 SRC CLI-Style Formula Test Results Summary:"
           echo "Runner: ${{ matrix.runner }}"
           echo "Architecture: ${{ matrix.arch }}"
           echo "Status: ${{ job.status }}"
           
           if [[ "${{ job.status }}" == "success" ]]; then
-            echo "✅ All AWS CLI-style formula tests passed!"
-            echo "🍺 AWS CLI-style Homebrew formula is working correctly"
+            echo "✅ All SRC CLI-style formula tests passed!"
+            echo "🍺 SRC CLI-style Homebrew formula is working correctly"
             echo "☁️  Azure SDK integration confirmed"
             echo "🔧 MSAL broker support with pymsalruntime verified"
             echo "📦 Selective binary wheel installation working"
           else
-            echo "❌ Some AWS CLI-style formula tests failed"
+            echo "❌ Some SRC CLI-style formula tests failed"
             echo "🔍 Check the job logs for details about:"
             echo "   - Formula installation issues"
             echo "   - Azure SDK availability problems"
@@ -319,29 +319,29 @@ jobs:
           fi
 
   notify-results:
-    name: Notify AWS CLI-Style Test Results
-    needs: test-aws-cli-style-formula
+    name: Notify SRC CLI-Style Test Results
+    needs: test-src-cli-style-formula
     runs-on: ubuntu-latest
     if: always()
     
     steps:
       - name: Check test results
         run: |
-          echo "🎯 Overall AWS CLI-Style Formula Test Results:"
-          echo "Needed jobs status: ${{ needs.test-aws-cli-style-formula.result }}"
+          echo "🎯 Overall SRC CLI-Style Formula Test Results:"
+          echo "Needed jobs status: ${{ needs.test-src-cli-style-formula.result }}"
           
-          if [[ "${{ needs.test-aws-cli-style-formula.result }}" == "success" ]]; then
-            echo "✅ All AWS CLI-style Homebrew formula tests passed successfully!"
-            echo "🍺 AWS CLI-style tap installation working correctly on all tested platforms"
+          if [[ "${{ needs.test-src-cli-style-formula.result }}" == "success" ]]; then
+            echo "✅ All SRC CLI-style Homebrew formula tests passed successfully!"
+            echo "🍺 SRC CLI-style tap installation working correctly on all tested platforms"
             echo "☁️  Azure SDK integration confirmed working"
             echo "🔧 MSAL broker support with pymsalruntime verified working"
-            echo "📦 Selective binary wheel installation (AWS CLI approach) confirmed"
+            echo "📦 Selective binary wheel installation (SRC CLI approach) confirmed"
             echo "🎉 The hybrid approach (source + binary wheels) is working perfectly!"
           else
-            echo "❌ Some AWS CLI-style Homebrew formula tests failed"
+            echo "❌ Some SRC CLI-style Homebrew formula tests failed"
             echo "🔍 Check the job logs for details about:"
             echo "   - Formula generation or installation errors"
-            echo "   - AWS CLI-style dependency handling failures"
+            echo "   - SRC CLI-style dependency handling failures"
             echo "   - Azure SDK availability issues"
             echo "   - MSAL broker support problems"
             echo "   - pymsalruntime binary wheel installation failures"
