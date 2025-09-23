@@ -42,12 +42,14 @@ fix_shebang_lines() {
     local target_dir="$1"
     echo "🔧 Fixing shebang lines for portability in: $target_dir"
     
-    find "$target_dir/bin" -type f -executable | while read -r file; do
+    find "$target_dir/bin" -type f -perm +111 | while read -r file; do
         if head -1 "$file" | grep -q "^#!.*python"; then
             echo "  Fixing shebang in: $(basename "$file")"
             # Use 'c' command to replace the entire first line
             sed -i '' "1c\\
 #!/usr/local/lib/mycli-app/bin/python3" "$file"
+        fi
+    done
         fi
     done
     
@@ -181,11 +183,17 @@ chmod +x "/usr/local/bin/mycli"
 fix_shebang_lines_postinstall() {
     echo "🔧 Fixing shebang lines for installed environment..."
     
-    find "/usr/local/lib/mycli-app/bin" -type f -executable | while read -r file; do
+    find "/usr/local/lib/mycli-app/bin" -type f -perm +111 | while read -r file; do
         if head -1 "$file" | grep -q "^#!.*python"; then
             echo "  Fixing shebang in: $(basename "$file")"
             echo "  Original: $(head -1 "$file")"
             # Use 'c' command to replace the entire first line (consistent with build-time)
+            sed -i '' "1c\\
+#!/usr/local/lib/mycli-app/bin/python3" "$file"
+            echo "  New: $(head -1 "$file")"
+        fi
+    done
+}
             sed -i '' "1c\\
 #!/usr/local/lib/mycli-app/bin/python3" "$file"
             echo "  New: $(head -1 "$file")"
