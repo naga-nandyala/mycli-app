@@ -226,7 +226,7 @@ jobs:
           brew tap-info naga-nandyala/mycli-app
           
           echo "📋 Venv formula info:"
-          brew info mycli-app-venv
+          brew info --formula mycli-app-venv
           
           echo "📁 Venv installation files:"
           brew list mycli-app-venv
