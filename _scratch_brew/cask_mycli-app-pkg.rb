@@ -2,12 +2,12 @@ cask "mycli-app-pkg" do
   version "1.0.0"
   
   on_arm do
-    sha256 "0eed17e14a96766fa72046d6a6bd8d690d40c32e5c9b5a0e68be6b17fb864d6b"
+    sha256 "c91c9261b3a3671015565bfa570918d5062d21f02acd669cdd724f54d45f381b"
     url "https://github.com/naga-nandyala/mycli-app/releases/download/v#{version}/mycli-app-#{version}-arm64.pkg"
   end
   
   on_intel do
-    sha256 "afc1eeee7b8fd46657f3bca306dbaf5bd7f1fec56fdfd7cbf66d83d93d59b6ba"
+    sha256 "5637c56e0a989580ac8ae6a3bde1102db94d31ccea67ff2b64158aee2c358e02"
     url "https://github.com/naga-nandyala/mycli-app/releases/download/v#{version}/mycli-app-#{version}-x86_64.pkg"
   end
   
