@@ -1,4 +1,4 @@
-name: PKG Distribution(cask) - Update Homebrew
+name: (pkg) cask- Update Homebrew
 
 on:
   release:
