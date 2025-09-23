@@ -1,0 +1,260 @@
+name: Build and Release PKG Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-pkg:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Install build dependencies
+        pip install setuptools wheel
+
+    - name: Create venv bundle for ${{ matrix.arch }}
+      run: |
+        echo "🏗️  Creating venv bundle for ${{ matrix.arch }}"
+        
+        # Determine version
+        if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+        else
+          VERSION="${{ github.event.inputs.version || '1.0.0' }}"
+        fi
+        
+        # Create venv bundle (this should match your existing venv creation process)
+        python -m venv "build/mycli-${{ matrix.arch }}"
+        source "build/mycli-${{ matrix.arch }}/bin/activate"
+        
+        # Install the package with ALL Azure dependencies
+        pip install -e ".[azure,broker]"
+        
+        # Verify Azure dependencies are installed
+        echo "🔍 Verifying Azure dependencies..."
+        pip list | grep -E "(azure|msal)" || {
+          echo "❌ Azure dependencies not found!"
+          exit 1
+        }
+        
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Build .pkg installer
+      run: |
+        chmod +x macos_packaging/pkg_builder/build_pkg.sh
+        macos_packaging/pkg_builder/build_pkg.sh "$VERSION" "${{ matrix.arch }}"
+
+    - name: Upload .pkg artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: mycli-app-${{ env.VERSION }}-${{ matrix.arch }}.pkg
+        path: mycli-app-${{ env.VERSION }}.pkg
+        if-no-files-found: error
+
+  create-release:
+    needs: build-pkg
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Prepare release files
+      run: |
+        mkdir -p release/
+        
+        # Move .pkg files to release directory
+        find artifacts/ -name "*.pkg" -exec cp {} release/ \;
+        
+        # List what we're releasing
+        ls -la release/
+
+    - name: Extract version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: MyCLI App v${{ env.VERSION }}
+        draft: false
+        prerelease: false
+        files: release/*
+        body: |
+          # MyCLI App v${{ env.VERSION }}
+          
+          ## Installation Options
+          
+          ### Option 1: Direct .pkg Installation
+          Download the appropriate .pkg file for your architecture:
+          - `mycli-app-${{ env.VERSION }}-arm64.pkg` for Apple Silicon Macs
+          - `mycli-app-${{ env.VERSION }}-x86_64.pkg` for Intel Macs
+          
+          Then install with:
+          ```bash
+          sudo installer -pkg mycli-app-${{ env.VERSION }}-ARCH.pkg -target /
+          ```
+          
+          ### Option 2: Homebrew Cask (coming soon)
+          ```bash
+          brew tap nagarnandyala/homebrew-nagarnandyala
+          brew install --cask mycli-app-pkg
+          ```
+          
+          ## Usage
+          After installation, the `mycli` command will be available system-wide:
+          ```bash
+          mycli --help
+          mycli --version
+          mycli login
+          mycli status
+          ```
+          
+          ## Uninstall
+          To uninstall:
+          ```bash
+          sudo mycli-uninstall.sh
+          ```
+          
+          ## What's New
+          - Native macOS .pkg installer support
+          - System-wide installation in `/usr/local/bin`
+          - Improved installation and uninstallation experience
+          - Better integration with macOS security features
+          
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew-cask:
+    needs: create-release
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Download release info and update cask
+      run: |
+        echo "🔄 Updating Homebrew cask for v$VERSION"
+        
+        # Get release info from GitHub API
+        RELEASE_INFO=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/tags/v$VERSION")
+        
+        # Extract download URLs and SHA256s for both architectures
+        ARM64_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | contains("arm64.pkg")) | .browser_download_url')
+        X86_64_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | contains("x86_64.pkg")) | .browser_download_url')
+        
+        echo "ARM64 URL: $ARM64_URL"
+        echo "X86_64 URL: $X86_64_URL"
+        
+        # Download and calculate SHA256s
+        echo "📥 Downloading packages to calculate SHA256..."
+        curl -L -o "mycli-app-arm64.pkg" "$ARM64_URL"
+        curl -L -o "mycli-app-x86_64.pkg" "$X86_64_URL"
+        
+        ARM64_SHA256=$(shasum -a 256 "mycli-app-arm64.pkg" | cut -d' ' -f1)
+        X86_64_SHA256=$(shasum -a 256 "mycli-app-x86_64.pkg" | cut -d' ' -f1)
+        
+        echo "ARM64 SHA256: $ARM64_SHA256"
+        echo "X86_64 SHA256: $X86_64_SHA256"
+        
+        # Update the cask file
+        cat > "_scratch_brew/cask_mycli-app-pkg.rb" << EOF
+        cask "mycli-app-pkg" do
+          version "$VERSION"
+          
+          on_arm do
+            sha256 "$ARM64_SHA256"
+            url "https://github.com/${{ github.repository }}/releases/download/v#{version}/mycli-app-#{version}-arm64.pkg"
+          end
+          
+          on_intel do
+            sha256 "$X86_64_SHA256"
+            url "https://github.com/${{ github.repository }}/releases/download/v#{version}/mycli-app-#{version}-x86_64.pkg"
+          end
+          
+          name "MyCLI App (PKG Installer)"
+          desc "Azure CLI-style tool for cloud operations with native macOS installer"
+          homepage "https://github.com/${{ github.repository }}"
+          
+          # PKG installer approach
+          pkg "mycli-app-#{version}-#{Hardware::CPU.arch}.pkg"
+          
+          # Binary will be installed to /usr/local/bin/mycli by the pkg installer
+          binary "/usr/local/bin/mycli"
+          
+          # Uninstall options
+          uninstall script: {
+            executable: "/usr/local/bin/mycli-uninstall.sh",
+            sudo:       true
+          }
+          
+          # Postflight verification
+          postflight do
+            system_command "/usr/local/bin/mycli", args: ["--version"]
+          end
+          
+          # Additional info for users
+          caveats <<~EOS
+            MyCLI App has been installed system-wide to /usr/local/bin/mycli
+            
+            Usage:
+              mycli --help      # Show help
+              mycli --version   # Show version  
+              mycli login       # Login to Azure
+              mycli status      # Check status
+            
+            To uninstall:
+              sudo mycli-uninstall.sh
+            
+            Note: This version uses a native macOS .pkg installer for better
+            system integration and security compliance.
+          EOS
+        end
+        EOF
+
+    - name: Commit and push updated cask
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add "_scratch_brew/cask_mycli-app-pkg.rb"
+        git commit -m "Update mycli-app-pkg cask to v$VERSION with .pkg installer" || exit 0
+        git push

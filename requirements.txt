@@ -1,24 +1,16 @@
-# Core dependencies (always required)
-click>=8.0.0
-colorama>=0.4.0
+# Development requirements for MyCLI App
+# 
+# NOTE: This project uses pyproject.toml for dependency management.
+# For production dependencies, see pyproject.toml [project.dependencies]
+# For Azure dependencies, install with: pip install .[azure,broker]
 
-# Build and packaging tools
+# Build tools
 setuptools>=45.0.0
 wheel>=0.36.0
 
-# Optional Azure dependencies (install with: pip install mycli-app[azure])
-# azure-identity>=1.12.0
-# azure-mgmt-core>=1.3.0
-# azure-core>=1.24.0
-# msal>=1.20.0
-
-# Optional broker authentication (install with: pip install mycli-app[broker])
-# msal[broker]>=1.20,<2
-
-# Development dependencies (install with: pip install mycli-app[dev])
+# Development tools (optional)
+# Uncomment if needed for development:
 # pytest>=7.0.0
-# pytest-cov>=4.0.0
 # black>=22.0.0
 # flake8>=4.0.0
 # mypy>=0.990
-# twine>=4.0.0
