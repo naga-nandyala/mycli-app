@@ -2,17 +2,17 @@
 class MycliAppVenv < Formula
   desc "Simple Azure-like CLI tool by Naga (Portable Virtual Environment Bundle)"
   homepage "https://github.com/naga-nandyala/mycli-app"
-  version "1.0.1"
+  version "1.0.0"
   license "MIT"
 
   base_url = "https://github.com/naga-nandyala/mycli-app/releases/download/v#{version}"
   
   if Hardware::CPU.arm?
-    url "#{base_url}/mycli-arm64-1.0.1-arm64.tar.gz"
-    sha256 "fd4d561e0d01e8bfd644d904e4714408c211a673408e34045e07bfac413a086c"
+    url "#{base_url}/mycli-arm64-1.0.0-arm64.tar.gz"
+    sha256 "c0b863fa3e6f983b92e7f293baeb3c5b4342f815456a02a6069795e726fc05fb"
   else
-    url "#{base_url}/mycli-x86_64-1.0.1-x86_64.tar.gz"
-    sha256 "8ba3bf2a5f136f469cc33669ce4de57db76a1f37464f7f691a778e848a537001"
+    url "#{base_url}/mycli-x86_64-1.0.0-x86_64.tar.gz"
+    sha256 "2141f2ba8a35239ddd83bde90f03f62e87105b51943d51a135563510061ec547"
   end
 
   def install
