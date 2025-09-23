@@ -248,7 +248,7 @@ jobs:
           echo "✅ Logout command completed successfully"
           
           # Test login command structure (without actually logging in)
-          echo "� Testing login command help:"
+          echo "🔑 Testing login command help:"
           login_help=$(mycli login --help 2>&1)
           echo "Login help output:"
           echo "$login_help"
@@ -258,6 +258,42 @@ jobs:
           else
             echo "⚠️  Login command may be missing some authentication options"
           fi
+      
+      - name: Test login with timeout
+        timeout-minutes: 1
+        run: |
+          echo "� Testing login command with --force-broker:"
+          
+          # Run login command and capture output and exit code
+          # In CI environment, we expect this to fail gracefully
+          login_output=$(mycli login --force-broker 2>&1) || login_exit_code=$?
+          echo "Login output: $login_output"
+          echo "Login exit code: ${login_exit_code:-0}"
+          
+          # Check if the command attempted broker authentication
+          if echo "$login_output" | grep -q "Broker-based authentication"; then
+            echo "✅ Broker authentication method was attempted"
+            
+            # Check if it failed due to CI environment (expected)
+            if echo "$login_output" | grep -q "Force broker specified but only browser authentication is available\|Authorization type is not supported\|No accounts were found in the cache"; then
+              echo "✅ Expected broker authentication failure in CI environment"
+              echo "✅ This confirms broker detection is working correctly"
+            elif echo "$login_output" | grep -q "Successfully authenticated"; then
+              echo "✅ Broker authentication succeeded (unexpected but good!)"
+            else
+              echo "⚠️  Unexpected broker authentication result, but continuing..."
+            fi
+          else
+            echo "❌ Broker authentication method was not attempted"
+            echo "This indicates a potential issue with Azure SDK integration"
+            exit 1
+          fi
+          
+          echo "✅ Force-broker login test completed successfully"
+          
+          # Ensure we're logged out after the test
+          echo "📤 Ensuring logout after broker test:"
+          mycli logout 2>/dev/null || true
       
       - name: Test SRC CLI-style dependency verification
         run: |
