@@ -5,13 +5,15 @@ set -euo pipefail
 # This script creates a proper macOS installer package
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 VERSION="${1:-1.0.0}"
 ARCH="${2:-$(uname -m)}"
 
 echo "🏗️  Building .pkg installer for MyCLI App"
 echo "Version: $VERSION"
 echo "Architecture: $ARCH"
+echo "Script directory: $SCRIPT_DIR"
+echo "Project root: $PROJECT_ROOT"
 
 # Create temporary build directory
 BUILD_DIR="$PROJECT_ROOT/build/pkg"
@@ -32,6 +34,7 @@ mkdir -p "$PAYLOAD_DIR/usr/local/lib/mycli-app"
 
 # Copy the mycli application (assuming venv bundle approach)
 VENV_BUNDLE_PATH="$PROJECT_ROOT/build/mycli-$ARCH"
+echo "🔍 Looking for venv bundle at: $VENV_BUNDLE_PATH"
 if [[ -d "$VENV_BUNDLE_PATH" ]]; then
     echo "📋 Copying venv bundle from: $VENV_BUNDLE_PATH"
     cp -r "$VENV_BUNDLE_PATH"/* "$PAYLOAD_DIR/usr/local/lib/mycli-app/"
@@ -55,6 +58,12 @@ EOF
 else
     echo "❌ Venv bundle not found at: $VENV_BUNDLE_PATH"
     echo "Creating venv bundle with Azure dependencies..."
+    
+    # Verify pyproject.toml exists
+    if [[ ! -f "$PROJECT_ROOT/pyproject.toml" ]]; then
+        echo "❌ pyproject.toml not found at: $PROJECT_ROOT/pyproject.toml"
+        exit 1
+    fi
     
     # Create the venv bundle
     python3 -m venv "$VENV_BUNDLE_PATH"
