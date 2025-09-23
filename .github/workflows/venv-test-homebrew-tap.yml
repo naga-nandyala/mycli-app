@@ -68,7 +68,7 @@ jobs:
           brew tap | grep naga-nandyala/mycli-app
           
           echo "🍺 Installing mycli-app-venv (venv bundling formula)..."
-          brew install mycli-app-venv
+          brew install --formula mycli-app-venv
       
       - name: Verify installation
         run: |
