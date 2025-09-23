@@ -50,8 +50,6 @@ fix_shebang_lines() {
 #!/usr/local/lib/mycli-app/bin/python3" "$file"
         fi
     done
-        fi
-    done
     
     # Also fix any pth files that might have absolute paths
     find "$target_dir" -name "*.pth" | while read -r pth_file; do
