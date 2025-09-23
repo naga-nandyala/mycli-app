@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Build macOS .pkg installer for MyCLI App
 # This script creates a proper macOS installer package
+# Version: 2.0 - Includes Python virtual environment portability fixes (Sept 23, 2025)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -166,6 +167,7 @@ EOF
 cat > "$SCRIPTS_DIR/postinstall" << 'EOF'
 #!/bin/bash
 # Postinstall script for MyCLI App
+# Updated with Python virtual environment portability fixes
 
 echo "📋 MyCLI App: Completing installation..."
 
