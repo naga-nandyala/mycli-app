@@ -229,7 +229,7 @@ jobs:
           brew info --formula mycli-app-venv
           
           echo "📁 Venv installation files:"
-          brew list mycli-app-venv
+          brew list --formula mycli-app-venv
       
       - name: Cleanup
         if: always()
