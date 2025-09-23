@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Build macOS .pkg installer for MyCLI App
 # This script creates a proper macOS installer package
-# Version: 2.0 - Includes Python virtual environment portability fixes (Sept 23, 2025)
+# Version: 3.0 - Added critical postinstall shebang line fixing (Sept 23, 2025)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -92,7 +92,7 @@ else
         if head -1 "$file" | grep -q "^#!.*python"; then
             echo "Fixing shebang in: $(basename "$file")"
             # Replace the first line with a portable shebang
-            sed -i '1s|^#!.*python.*|#!/usr/local/lib/mycli-app/bin/python3|' "$file"
+            sed -i '' '1s|^#!.*python.*|#!/usr/local/lib/mycli-app/bin/python3|' "$file"
         fi
     done
     
@@ -101,7 +101,7 @@ else
         if [[ -f "$pth_file" ]]; then
             echo "Fixing paths in: $(basename "$pth_file")"
             # Replace absolute paths with relative paths
-            sed -i "s|$VENV_BUNDLE_PATH|/usr/local/lib/mycli-app|g" "$pth_file"
+            sed -i '' "s|$VENV_BUNDLE_PATH|/usr/local/lib/mycli-app|g" "$pth_file"
         fi
     done
     
@@ -175,6 +175,31 @@ echo "📋 MyCLI App: Completing installation..."
 chown -R root:wheel "/usr/local/lib/mycli-app"
 chmod -R 755 "/usr/local/lib/mycli-app"
 chmod +x "/usr/local/bin/mycli"
+
+# Fix shebang lines AFTER installation to ensure proper paths
+echo "🔧 Fixing shebang lines for installed environment..."
+find "/usr/local/lib/mycli-app/bin" -type f -executable | while read -r file; do
+    if head -1 "$file" | grep -q "^#!.*python"; then
+        echo "Fixing shebang in: $(basename "$file")"
+        # Replace the first line with the correct installed path
+        sed -i '' '1s|^#!.*python.*|#!/usr/local/lib/mycli-app/bin/python3|' "$file"
+    fi
+done
+
+# Fix any .pth files that might have build paths
+find "/usr/local/lib/mycli-app" -name "*.pth" | while read -r pth_file; do
+    if [[ -f "$pth_file" ]]; then
+        echo "Fixing paths in: $(basename "$pth_file")"
+        # Replace any remaining absolute build paths with installation paths
+        sed -i '' 's|/Users/runner/work/mycli-app/mycli-app/build/[^/]*/|/usr/local/lib/mycli-app/|g' "$pth_file"
+        sed -i '' 's|/tmp/[^/]*/mycli-[^/]*/|/usr/local/lib/mycli-app/|g' "$pth_file"
+    fi
+done
+
+# Clean and regenerate Python cache files
+echo "🧹 Cleaning Python cache files..."
+find "/usr/local/lib/mycli-app" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+find "/usr/local/lib/mycli-app" -name "*.pyc" -type f -delete 2>/dev/null || true
 
 # Regenerate Python bytecode for the target environment
 echo "🔄 Regenerating Python bytecode..."
