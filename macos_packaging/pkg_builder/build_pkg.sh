@@ -85,6 +85,33 @@ else
     # Now copy the bundle
     cp -r "$VENV_BUNDLE_PATH"/* "$PAYLOAD_DIR/usr/local/lib/mycli-app/"
     
+    # Fix shebang lines to use the target installation paths
+    echo "🔧 Fixing shebang lines for portability..."
+    find "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin" -type f -executable | while read -r file; do
+        if head -1 "$file" | grep -q "^#!.*python"; then
+            echo "Fixing shebang in: $(basename "$file")"
+            # Replace the first line with a portable shebang
+            sed -i '1s|^#!.*python.*|#!/usr/local/lib/mycli-app/bin/python3|' "$file"
+        fi
+    done
+    
+    # Also fix any pth files that might have absolute paths
+    find "$PAYLOAD_DIR/usr/local/lib/mycli-app" -name "*.pth" | while read -r pth_file; do
+        if [[ -f "$pth_file" ]]; then
+            echo "Fixing paths in: $(basename "$pth_file")"
+            # Replace absolute paths with relative paths
+            sed -i "s|$VENV_BUNDLE_PATH|/usr/local/lib/mycli-app|g" "$pth_file"
+        fi
+    done
+    
+    # Clean up Python cache files that might contain absolute paths
+    echo "🧹 Cleaning up Python cache files..."
+    find "$PAYLOAD_DIR/usr/local/lib/mycli-app" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    find "$PAYLOAD_DIR/usr/local/lib/mycli-app" -name "*.pyc" -type f -delete 2>/dev/null || true
+    find "$PAYLOAD_DIR/usr/local/lib/mycli-app" -name "*.pyo" -type f -delete 2>/dev/null || true
+    
+    echo "✅ Fixed shebang lines and paths for target installation"
+    
     # Create symlink script in /usr/local/bin
     cat > "$PAYLOAD_DIR/usr/local/bin/mycli" << 'EOF'
 #!/bin/bash
@@ -93,6 +120,25 @@ MYCLI_HOME="/usr/local/lib/mycli-app"
 exec "$MYCLI_HOME/bin/mycli" "$@"
 EOF
     chmod +x "$PAYLOAD_DIR/usr/local/bin/mycli"
+    
+    # Verify the mycli script works with the fixed paths
+    echo "🧪 Verifying mycli script..."
+    if [[ -f "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/python3" ]]; then
+        echo "✅ Python interpreter found at target location"
+        
+        # Test that the fixed mycli script can at least try to run
+        # (We can't fully test it since we're not in the target environment)
+        if grep -q "#!/usr/local/lib/mycli-app/bin/python3" "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/mycli"; then
+            echo "✅ mycli shebang correctly fixed"
+        else
+            echo "⚠️  mycli shebang may not be fixed properly"
+        fi
+    else
+        echo "❌ Python interpreter not found in expected location"
+        echo "Available files in bin directory:"
+        ls -la "$PAYLOAD_DIR/usr/local/lib/mycli-app/bin/" || echo "Bin directory not found"
+        exit 1
+    fi
 fi
 
 # Create preinstall script
@@ -128,11 +174,31 @@ chown -R root:wheel "/usr/local/lib/mycli-app"
 chmod -R 755 "/usr/local/lib/mycli-app"
 chmod +x "/usr/local/bin/mycli"
 
+# Regenerate Python bytecode for the target environment
+echo "🔄 Regenerating Python bytecode..."
+if [[ -f "/usr/local/lib/mycli-app/bin/python3" ]]; then
+    "/usr/local/lib/mycli-app/bin/python3" -m compileall "/usr/local/lib/mycli-app/lib/python3.12/site-packages/" 2>/dev/null || true
+    echo "✅ Python bytecode regenerated"
+else
+    echo "⚠️  Python interpreter not found, skipping bytecode regeneration"
+fi
+
 # Test installation
+echo "🧪 Testing installation..."
 if /usr/local/bin/mycli --version >/dev/null 2>&1; then
     echo "✅ MyCLI App installed successfully!"
+    
+    # Show version info
+    echo "Installed version: $(/usr/local/bin/mycli --version)"
 else
     echo "⚠️  MyCLI App installation may have issues"
+    echo "Debugging info:"
+    echo "- Launcher script exists: $(test -f /usr/local/bin/mycli && echo 'Yes' || echo 'No')"
+    echo "- Python interpreter exists: $(test -f /usr/local/lib/mycli-app/bin/python3 && echo 'Yes' || echo 'No')"
+    echo "- mycli script exists: $(test -f /usr/local/lib/mycli-app/bin/mycli && echo 'Yes' || echo 'No')"
+    if [[ -f "/usr/local/lib/mycli-app/bin/mycli" ]]; then
+        echo "- mycli shebang: $(head -1 /usr/local/lib/mycli-app/bin/mycli)"
+    fi
 fi
 
 echo ""
